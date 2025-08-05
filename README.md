@@ -1,0 +1,246 @@
+# Wedge Pay iOS
+
+A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer component with bidirectional communication capabilities.
+
+## Features
+
+- 🎯 **Native SwiftUI Integration**: Built with SwiftUI and UIViewRepresentable for modern iOS apps
+- 🔄 **Bidirectional Communication**: Real-time messaging between the webapp and native SDK
+- ⚙️ **Configurable**: Support for integration, sandbox, and production environments
+- 🎨 **Modern UI**: Clean, native iOS design with smooth animations
+- 📱 **iOS 14+ Support**: Built for modern iOS applications
+- 🔒 **Security**: HTTPS-only navigation, input validation, and secure communication
+- ♿ **Accessibility**: Full VoiceOver support and accessibility labels
+- 🔄 **Error Handling**: Comprehensive error handling with retry mechanisms
+- 🧹 **Memory Management**: Proper cleanup and memory leak prevention
+- 🎨 **Theme Support**: Light and dark theme support
+
+## Installation
+
+### Swift Package Manager
+
+Add the following dependency to your `Package.swift` file:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/your-org/wedge-pay-ios.git", from: "1.0.0")
+]
+```
+
+Or add it directly in Xcode:
+1. Go to File → Add Package Dependencies
+2. Enter the repository URL: `https://github.com/your-org/wedge-pay-ios.git`
+3. Select the version you want to use
+
+## Quick Start
+
+### 1. Import the SDK
+
+```swift
+import SwiftUI
+import WedgePayIOS
+```
+
+### 2. Use the SwiftUI View
+
+```swift
+WedgePayIOS(
+    token: "your-onboarding-token",
+    env: "sandbox", // or "integration", "production"
+    theme: "light", // or "dark"
+    onEvent: { event in
+        // Handle general events
+        print("Event: \(event)")
+    },
+    onSuccess: { customerId in
+        // Handle successful onboarding completion
+        print("Onboarding completed for customer: \(customerId)")
+    },
+    onClose: { _ in
+        // Handle user close/cancel
+        print("User closed onboarding")
+    },
+    onLoad: { url in
+        // Handle webapp load
+        print("Webapp loaded: \(url)")
+    },
+    onError: { error in
+        // Handle errors
+        print("Onboarding error: \(error)")
+    }
+)
+```
+
+## Complete SwiftUI Example
+
+```swift
+import SwiftUI
+import WedgePayIOS
+
+struct ContentView: View {
+    @State private var showingOnboarding = false
+    @State private var statusMessage = "Ready to start onboarding"
+    
+    var body: some View {
+        VStack {
+            Text(statusMessage)
+                .padding()
+            
+            Button("Start Onboarding") {
+                showingOnboarding = true
+            }
+            .sheet(isPresented: $showingOnboarding) {
+                WedgePayIOS(
+                    token: "your-onboarding-token-here",
+                    env: "sandbox",
+                    theme: "light",
+                    onEvent: { event in
+                        print("Event: \(event)")
+                    },
+                    onSuccess: { customerId in
+                        statusMessage = "✅ Success! Customer ID: \(customerId)"
+                        showingOnboarding = false
+                    },
+                    onClose: { _ in
+                        statusMessage = "⚠️ User closed onboarding"
+                        showingOnboarding = false
+                    },
+                    onLoad: { url in
+                        print("Loaded: \(url)")
+                    },
+                    onError: { error in
+                        statusMessage = "❌ Error: \(error)"
+                        showingOnboarding = false
+                    }
+                )
+            }
+        }
+    }
+}
+```
+
+## API Reference
+
+### WedgePayIOS
+
+Main SwiftUI view for the SDK.
+
+```swift
+public struct WedgePayIOS: UIViewRepresentable {
+    public init(
+        shouldDismiss: Bool = false,
+        token: String,
+        env: String,
+        theme: String = "light",
+        onEvent: @escaping (Any) -> Void,
+        onSuccess: @escaping (String) -> Void,
+        onClose: @escaping (Any) -> Void,
+        onLoad: @escaping (Any) -> Void,
+        onError: @escaping (Any) -> Void
+    )
+}
+```
+
+### Parameters
+
+- `token`: Your onboarding token
+- `env`: Environment ("integration", "sandbox", "production")
+- `theme`: UI theme ("light" or "dark")
+- `onEvent`: Called for general events
+- `onSuccess`: Called when onboarding completes successfully
+- `onClose`: Called when user closes/cancels
+- `onLoad`: Called when webapp loads
+- `onError`: Called when errors occur
+
+### Available Environments
+
+```swift
+var environments = [
+    "integration": "https://onboarding-integration.wedge-can.com",
+    "sandbox": "https://onboarding-sandbox.wedge-can.com",
+    "production": "https://onboarding.wedge-can.com"
+]
+```
+
+## WebApp Communication
+
+The SDK communicates with the webapp using `WKScriptMessageHandler`. The webapp should send messages using the global `window.wedgeOnboarding` object.
+
+### Message Format
+
+```javascript
+// Success event
+window.wedgeOnboarding.postMessage({
+    event: "onSuccess",
+    customerId: "customer-123"
+});
+
+// Error event
+window.wedgeOnboarding.postMessage({
+    event: "onError",
+    errorCode: "verification_failed"
+});
+
+// Close event
+window.wedgeOnboarding.postMessage({
+    event: "onClose",
+    reason: "user_cancelled"
+});
+```
+
+### Available Events
+
+- `onSuccess`: Triggered when onboarding completes successfully
+  - Required: `customerId` (String)
+- `onError`: Triggered when identity verification fails
+  - Required: `errorCode` (String)
+- `onClose`: Triggered when user closes/cancels
+  - Optional: `reason` (String)
+
+### JavaScript API
+
+The SDK automatically injects a global `window.wedgeOnboarding` object into the webapp with the following API:
+
+```javascript
+// Check if the bridge is available
+if (window.wedgeOnboarding) {
+    // Send a message to the native SDK
+    window.wedgeOnboarding.postMessage({
+        event: "onSuccess",
+        customerId: "customer-123"
+    });
+}
+```
+
+## Security & Best Practices
+
+### Security Features
+- **HTTPS Only**: All navigation is restricted to HTTPS URLs
+- **Domain Validation**: Only allows navigation to authorized domains
+- **Input Validation**: Validates all inputs and tokens before processing
+- **Non-Persistent Storage**: Uses non-persistent website data store for privacy
+
+### Error Handling
+- **Retry Mechanism**: Automatic retry with configurable limits
+- **Graceful Degradation**: Handles network failures and invalid states
+- **Comprehensive Logging**: Detailed error logging for debugging
+- **User Feedback**: Clear error messages and loading states
+
+### Memory Management
+- **Proper Cleanup**: Removes message handlers and clears webview on dismissal
+- **No Memory Leaks**: Implements proper lifecycle management
+- **Resource Management**: Efficient handling of webview resources
+
+## Requirements
+
+- iOS 14.0+
+- Swift 5.9+
+- Xcode 15.0+
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For support and questions, please contact the Wedge team or create an issue in this repository. 
