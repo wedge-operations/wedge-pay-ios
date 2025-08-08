@@ -10,7 +10,7 @@ final class WedgePayIOSTests: XCTestCase {
         
         XCTAssertEqual(environments["integration"], "https://onboarding-integration.wedge-can.com")
         XCTAssertEqual(environments["sandbox"], "https://onboarding-sandbox.wedge-can.com")
-        XCTAssertEqual(environments["production"], "https://onboarding.wedge-can.com")
+        XCTAssertEqual(environments["production"], "https://onboarding-production.wedge-can.com")
     }
     
     #if os(iOS)
