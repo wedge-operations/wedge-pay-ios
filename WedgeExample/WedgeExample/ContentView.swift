@@ -115,15 +115,28 @@ struct ContentView: View {
     
     private func handleOnboardingExit(status: String, customerId: String) {
         // Enhanced logging for exit events
-        print("🚪 EXIT EVENT TRIGGERED")
-        print("   Status: \(status)")
-        print("   Customer ID: \(customerId)")
-        print("   Timestamp: \(Date())")
-        print("   Environment: \(selectedEnvironment)")
+        var exitMessage = "⚠️ User exited onboarding"
+        var exitColor: Color = .orange
         
-        statusMessage = "⚠️ User exited onboarding\nStatus: \(status)\nCustomer ID: \(customerId)"
-        statusColor = .orange
-        showAlert(title: "Onboarding Exited", message: "User exited at status: \(status)")
+        // Handle different exit scenarios
+        switch status {
+        case "error_exit":
+            exitMessage = "❌ Onboarding failed and SDK exited\nError occurred during onboarding"
+            exitColor = .red
+        case "navigation_error", "provisional_navigation_error":
+            exitMessage = "❌ Network error and SDK exited\nFailed to load onboarding"
+            exitColor = .red
+        case "user_cancelled":
+            exitMessage = "⚠️ User cancelled onboarding\nUser manually closed the SDK"
+            exitColor = .orange
+        default:
+            exitMessage = "⚠️ User exited onboarding\nStatus: \(status)"
+            exitColor = .orange
+        }
+        
+        statusMessage = exitMessage
+        statusColor = exitColor
+        showAlert(title: "Onboarding Exited", message: "Exit reason: \(status)")
     }
     
     private func showAlert(title: String, message: String) {
@@ -154,12 +167,16 @@ struct OnboardingView: View {
                 onSuccess(customerId)
                 presentationMode.wrappedValue.dismiss()
             },
-            onClose: { _ in
-                onClose("Closed")
+            onClose: { reason in
+                onClose(reason)
                 presentationMode.wrappedValue.dismiss()
             },
             onLoad: onLoad,
-            onError: onError
+            onError: { error in
+                onError(error)
+                // Note: onClose will be automatically called by the SDK when onError occurs
+                // so we don't need to manually dismiss here
+            }
         )
         .navigationTitle("Onboarding")
         .navigationBarTitleDisplayMode(.inline)
