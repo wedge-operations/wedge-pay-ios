@@ -13,7 +13,7 @@ A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer 
 - ♿ **Accessibility**: Full VoiceOver support and accessibility labels
 - 🔄 **Error Handling**: Comprehensive error handling with retry mechanisms
 - 🧹 **Memory Management**: Proper cleanup and memory leak prevention
-- 🎨 **Theme Support**: Light and dark theme support
+
 
 ## Installation
 

@@ -6,10 +6,10 @@ struct ContentView: View {
     @State private var selectedEnvironment: String = "sandbox"
     @State private var statusMessage: String = "Ready to start onboarding"
     @State private var statusColor: Color = .primary
-    @State private var showingOnboarding = false
     @State private var showingAlert = false
     @State private var alertTitle = ""
     @State private var alertMessage = ""
+    @State private var navigateToOnboarding = false
     
     private let environments = ["integration", "sandbox", "production"]
     
@@ -50,27 +50,9 @@ struct ContentView: View {
                 .padding(.horizontal)
                 
                 // Start Button
-                Button(action: startOnboarding) {
-                    Text("Start Onboarding")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color.blue)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal)
-                
-                Spacer()
-            }
-            .padding(.top, 40)
-            .navigationTitle("Wedge iOS SDK")
-            .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showingOnboarding) {
-                WedgePayIOS(
+                NavigationLink(destination: OnboardingView(
                     token: token,
                     env: selectedEnvironment,
-                    theme: "light",
                     onEvent: { event in
                         print("Event: \(event)")
                     },
@@ -86,8 +68,22 @@ struct ContentView: View {
                     onError: { error in
                         handleOnboardingError(errorCode: "\(error)")
                     }
-                )
+                ), isActive: $navigateToOnboarding) {
+                    Text("Start Onboarding")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color.blue)
+                        .cornerRadius(12)
+                }
+                .padding(.horizontal)
+                
+                Spacer()
             }
+            .padding(.top, 40)
+            .navigationTitle("Wedge iOS SDK")
+            .navigationBarTitleDisplayMode(.large)
             .alert(alertTitle, isPresented: $showingAlert) {
                 Button("OK") { }
             } message: {
@@ -102,7 +98,7 @@ struct ContentView: View {
             return
         }
         
-        showingOnboarding = true
+        navigateToOnboarding = true
     }
     
     private func handleOnboardingSuccess(customerId: String) {
@@ -118,6 +114,13 @@ struct ContentView: View {
     }
     
     private func handleOnboardingExit(status: String, customerId: String) {
+        // Enhanced logging for exit events
+        print("🚪 EXIT EVENT TRIGGERED")
+        print("   Status: \(status)")
+        print("   Customer ID: \(customerId)")
+        print("   Timestamp: \(Date())")
+        print("   Environment: \(selectedEnvironment)")
+        
         statusMessage = "⚠️ User exited onboarding\nStatus: \(status)\nCustomer ID: \(customerId)"
         statusColor = .orange
         showAlert(title: "Onboarding Exited", message: "User exited at status: \(status)")
@@ -127,6 +130,41 @@ struct ContentView: View {
         alertTitle = title
         alertMessage = message
         showingAlert = true
+    }
+}
+
+// Onboarding view as a page in the app navigation
+struct OnboardingView: View {
+    @Environment(\.presentationMode) var presentationMode
+    
+    let token: String
+    let env: String
+    let onEvent: (Any) -> ()
+    let onSuccess: (String) -> ()
+    let onClose: (Any) -> ()
+    let onLoad: (Any) -> ()
+    let onError: (Any) -> ()
+    
+    var body: some View {
+        WedgePayIOS(
+            token: token,
+            env: env,
+            onEvent: onEvent,
+            onSuccess: { customerId in
+                onSuccess(customerId)
+                presentationMode.wrappedValue.dismiss()
+            },
+            onClose: { _ in
+                onClose("Closed")
+                presentationMode.wrappedValue.dismiss()
+            },
+            onLoad: onLoad,
+            onError: onError
+        )
+        .navigationTitle("Onboarding")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .navigationBarHidden(true)
     }
 }
 

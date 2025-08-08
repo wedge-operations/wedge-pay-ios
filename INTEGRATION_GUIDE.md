@@ -274,7 +274,7 @@ onboarding.closeOnboarding("user_cancelled");
 var environments = [
     "integration": "https://onboarding-integration.wedge-can.com",
     "sandbox": "https://onboarding-sandbox.wedge-can.com",
-    "production": "https://onboarding.wedge-can.com"
+    "production": "https://onboarding-production.wedge-can.com"
 ]
 ```
 

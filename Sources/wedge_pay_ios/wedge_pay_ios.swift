@@ -3,27 +3,22 @@ import WebKit
 
 var environments = ["integration": "https://onboarding-integration.wedge-can.com",
                     "sandbox": "https://onboarding-sandbox.wedge-can.com",
-                    "production": "https://onboarding.wedge-can.com"]
+                    "production": "https://onboarding-production.wedge-can.com"]
 
 #if os(iOS)
 @available(iOS 14.0, *)
 public struct WedgePayIOS: UIViewRepresentable {
-    @State fileprivate var shouldDismiss = false
-
     var token: String
     var env: String
-    var theme: String
     var onEvent: (Any) -> ()
     var onSuccess: (String) -> ()
     var onClose: (Any) -> ()
     var onLoad: (Any) -> ()
     var onError: (Any) -> ()
     
-    public init(shouldDismiss: Bool = false, token: String, env: String, theme: String = "light", onEvent: @escaping (Any) -> Void, onSuccess: @escaping (String) -> Void, onClose: @escaping (Any) -> Void, onLoad: @escaping (Any) -> Void, onError: @escaping (Any) -> Void) {
-        self.shouldDismiss = shouldDismiss
+    public init(token: String, env: String, onEvent: @escaping (Any) -> Void, onSuccess: @escaping (String) -> Void, onClose: @escaping (Any) -> Void, onLoad: @escaping (Any) -> Void, onError: @escaping (Any) -> Void) {
         self.token = token
         self.env = env
-        self.theme = theme
         self.onEvent = onEvent
         self.onSuccess = onSuccess
         self.onClose = onClose
@@ -32,13 +27,40 @@ public struct WedgePayIOS: UIViewRepresentable {
     }
     
     public func makeUIView(context: Context) -> WKWebView {
-        let prefs = WKWebpagePreferences()
-        prefs.allowsContentJavaScript = true
         let config = WKWebViewConfiguration()
+        
+        // Configure WebView preferences for iOS 14+
+        if #available(iOS 14.0, *) {
+            let prefs = WKWebpagePreferences()
+            prefs.allowsContentJavaScript = true
+            config.defaultWebpagePreferences = prefs
+        } else {
+            config.preferences.javaScriptEnabled = true
+        }
+        
+        // Configure WebView to reduce constraint conflicts
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
         
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
+        
+        // Disable autoresizing mask to prevent constraint conflicts
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Configure WebView appearance for page-based navigation
+        webView.allowsBackForwardNavigationGestures = true
+        webView.scrollView.contentInsetAdjustmentBehavior = .automatic
+        
+        // Show scroll indicators for better UX in page navigation
+        webView.scrollView.showsVerticalScrollIndicator = true
+        webView.scrollView.showsHorizontalScrollIndicator = true
+        webView.scrollView.bounces = true
+        
+        // Allow zoom for better accessibility
+        webView.scrollView.maximumZoomScale = 3.0
+        webView.scrollView.minimumZoomScale = 0.5
         
         // inject JS to capture console.log output and send to iOS
         let source = "function captureLog(msg) { window.webkit.messageHandlers.logHandler.postMessage(msg); } window.console.log = captureLog;"
@@ -55,23 +77,21 @@ public struct WedgePayIOS: UIViewRepresentable {
 
         context.coordinator.webView = webView
 
-        // SETUP GESTURE RECOGNIZER
-        let gestureRecognizerBack = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(context.coordinator.handleBack))
-        gestureRecognizerBack.direction = .right // back navigation
-        gestureRecognizerBack.delegate = context.coordinator
-        webView.addGestureRecognizer(gestureRecognizerBack)
-        
-        let gestureRecognizerForward = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(context.coordinator.handleForward))
-        gestureRecognizerForward.direction = .left // forward navigation
-        gestureRecognizerForward.delegate = context.coordinator
-        webView.addGestureRecognizer(gestureRecognizerForward)
-        
+        // Configure gesture handling for page-based navigation
+        // Note: Back/forward gestures are handled by the WebView's built-in navigation
         webView.isUserInteractionEnabled = true
-        webView.allowsBackForwardNavigationGestures = true
 
-        let url = URL(string: """
-            \(environments[env]!)?onboardingToken=\(token)&defaultTheme=\(theme)
-            """)
+        guard let environmentUrl = environments[env] else {
+            print("Error: Environment '\(env)' not found. Available environments: \(environments.keys.joined(separator: ", "))")
+            // Fallback to sandbox if environment is invalid
+            let fallbackUrl = environments["sandbox"]!
+            let url = URL(string: "\(fallbackUrl)?onboardingToken=\(token)")
+            let request = URLRequest(url: url!)
+            webView.load(request)
+            return webView
+        }
+        
+        let url = URL(string: "\(environmentUrl)?onboardingToken=\(token)")
 
         let request = URLRequest(url: url!)
         webView.load(request)
@@ -79,43 +99,20 @@ public struct WedgePayIOS: UIViewRepresentable {
     }
     
     public func updateUIView(_ uiView: WKWebView, context: Context) {
-        guard !shouldDismiss || !context.environment.presentationMode.wrappedValue.isPresented else {
-               context.environment.presentationMode.wrappedValue.dismiss()
-               return
-          }
+        // No modal-specific updates needed for page-based navigation
     }
     
     public func makeCoordinator() -> Coordinator {
         return Coordinator(wrapper: self)
     }
 
-    public class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler, WKUIDelegate, UIGestureRecognizerDelegate {
+    public class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler, WKUIDelegate {
         
         var wrapper: WedgePayIOS
         var webView: WKWebView?
         
         init(wrapper: WedgePayIOS) {
             self.wrapper = wrapper
-        }
-        
-        public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            return true
-        }
-        
-        public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            return true
-        }
-        
-        @objc public func handleBack() {
-            if webView!.canGoBack {
-                webView!.goBack()
-            }
-        }
-        
-        @objc public func handleForward() {
-            if webView!.canGoForward {
-                webView!.goForward()
-            }
         }
         
         public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -125,14 +122,12 @@ public struct WedgePayIOS: UIViewRepresentable {
                 case "onEvent":
                     wrapper.onEvent(message.body)
                 case "onSuccess":
-                    wrapper.shouldDismiss = true
                     if let body = message.body as? String {
                         wrapper.onSuccess(body)
                     } else {
                         wrapper.onSuccess("\(message.body)")
                     }
                 case "onClose":
-                    wrapper.shouldDismiss = true
                     wrapper.onClose("Closed")
                 default:
                     break
@@ -144,7 +139,10 @@ public struct WedgePayIOS: UIViewRepresentable {
         }
         
         public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            wrapper.onLoad("\(webView.url!)")
+            guard let url = webView.url else { return }
+            
+            wrapper.onLoad("\(url)")
+            
             let triggerEventScript = """
                 var event = new CustomEvent('iOSReady', { detail: 'iOS Ready' });
                 window.dispatchEvent(event);
@@ -156,6 +154,16 @@ public struct WedgePayIOS: UIViewRepresentable {
                     print("Event triggered successfully")
                 }
             }
+        }
+        
+        public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            print("WebView navigation failed: \(error.localizedDescription)")
+            wrapper.onError("Navigation failed: \(error.localizedDescription)")
+        }
+        
+        public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            print("WebView provisional navigation failed: \(error.localizedDescription)")
+            wrapper.onError("Provisional navigation failed: \(error.localizedDescription)")
         }
         
         public func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
