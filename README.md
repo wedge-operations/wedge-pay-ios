@@ -2,6 +2,8 @@
 
 A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer component with bidirectional communication capabilities.
 
+**Version**: 1.0.0
+
 ## Features
 
 - 🎯 **Native SwiftUI Integration**: Built with SwiftUI and UIViewRepresentable for modern iOS apps
