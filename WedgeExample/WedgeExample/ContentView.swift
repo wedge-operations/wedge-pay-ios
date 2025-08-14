@@ -9,48 +9,81 @@ struct ContentView: View {
     @State private var showingAlert = false
     @State private var alertTitle = ""
     @State private var alertMessage = ""
-    @State private var navigateToOnboarding = false
+    @State private var showingOnboarding = false
     
     private let environments = ["integration", "sandbox", "production"]
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 30) {
-                // Status Label
-                Text(statusMessage)
-                    .font(.headline)
-                    .foregroundColor(statusColor)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                
-                // Environment Picker
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Environment")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+        ZStack {
+            // Main content
+            NavigationView {
+                VStack(spacing: 30) {
+                    // Status Label
+                    Text(statusMessage)
+                        .font(.headline)
+                        .foregroundColor(statusColor)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
                     
-                    Picker("Environment", selection: $selectedEnvironment) {
-                        ForEach(environments, id: \.self) { env in
-                            Text(env.capitalized).tag(env)
+                    // Environment Picker
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Environment")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Picker("Environment", selection: $selectedEnvironment) {
+                            ForEach(environments, id: \.self) { env in
+                                Text(env.capitalized).tag(env)
+                            }
                         }
+                        .pickerStyle(SegmentedPickerStyle())
                     }
-                    .pickerStyle(SegmentedPickerStyle())
-                }
-                .padding(.horizontal)
-                
-                // Token Text Field
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Onboarding Token")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    .padding(.horizontal)
                     
-                    TextField("Enter onboarding token", text: $token)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    // Token Text Field
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Onboarding Token")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        TextField("Enter onboarding token", text: $token)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    }
+                    .padding(.horizontal)
+                    
+                    // Start Button
+                    Button(action: {
+                        guard !token.isEmpty else {
+                            showAlert(title: "Error", message: "Please enter an onboarding token")
+                            return
+                        }
+                        showingOnboarding = true
+                    }) {
+                        Text("Start Onboarding")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.blue)
+                            .cornerRadius(12)
+                    }
+                    .padding(.horizontal)
+                    
+                    Spacer()
                 }
-                .padding(.horizontal)
-                
-                // Start Button
-                NavigationLink(destination: OnboardingView(
+                .padding(.top, 40)
+                .navigationTitle("Wedge iOS SDK")
+                .navigationBarTitleDisplayMode(.large)
+                .alert(alertTitle, isPresented: $showingAlert) {
+                    Button("OK") { }
+                } message: {
+                    Text(alertMessage)
+                }
+            }
+            
+            // Onboarding overlay with bottom slide
+            if showingOnboarding {
+                OnboardingView(
                     token: token,
                     env: selectedEnvironment,
                     onEvent: { event in
@@ -58,47 +91,25 @@ struct ContentView: View {
                     },
                     onSuccess: { customerId in
                         handleOnboardingSuccess(customerId: customerId)
+                        showingOnboarding = false
                     },
                     onClose: { _ in
-                        handleOnboardingExit(status: "user_cancelled", customerId: "")
+                        handleOnboardingExit(status: "user_cancelled")
+                        showingOnboarding = false
                     },
                     onLoad: { url in
                         print("Loaded: \(url)")
                     },
                     onError: { error in
                         handleOnboardingError(errorCode: "\(error)")
+                        showingOnboarding = false
                     }
-                ), isActive: $navigateToOnboarding) {
-                    Text("Start Onboarding")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color.blue)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal)
-                
-                Spacer()
-            }
-            .padding(.top, 40)
-            .navigationTitle("Wedge iOS SDK")
-            .navigationBarTitleDisplayMode(.large)
-            .alert(alertTitle, isPresented: $showingAlert) {
-                Button("OK") { }
-            } message: {
-                Text(alertMessage)
+                )
+                .transition(.move(edge: .bottom))
+                .zIndex(1)
             }
         }
-    }
-    
-    private func startOnboarding() {
-        guard !token.isEmpty else {
-            showAlert(title: "Error", message: "Please enter an onboarding token")
-            return
-        }
-        
-        navigateToOnboarding = true
+        .animation(.easeInOut(duration: 0.3), value: showingOnboarding)
     }
     
     private func handleOnboardingSuccess(customerId: String) {
@@ -113,17 +124,30 @@ struct ContentView: View {
         showAlert(title: "Onboarding Failed", message: "Error code: \(errorCode)")
     }
     
-    private func handleOnboardingExit(status: String, customerId: String) {
+    private func handleOnboardingExit(status: String) {
         // Enhanced logging for exit events
-        print("🚪 EXIT EVENT TRIGGERED")
-        print("   Status: \(status)")
-        print("   Customer ID: \(customerId)")
-        print("   Timestamp: \(Date())")
-        print("   Environment: \(selectedEnvironment)")
+        var exitMessage = "⚠️ User exited onboarding"
+        var exitColor: Color = .orange
         
-        statusMessage = "⚠️ User exited onboarding\nStatus: \(status)\nCustomer ID: \(customerId)"
-        statusColor = .orange
-        showAlert(title: "Onboarding Exited", message: "User exited at status: \(status)")
+        // Handle different exit scenarios
+        switch status {
+        case "error_exit":
+            exitMessage = "❌ Onboarding failed and SDK exited\nError occurred during onboarding"
+            exitColor = .red
+        case "navigation_error", "provisional_navigation_error":
+            exitMessage = "❌ Network error and SDK exited\nFailed to load onboarding"
+            exitColor = .red
+        case "user_cancelled":
+            exitMessage = "⚠️ User cancelled onboarding\nUser manually closed the SDK"
+            exitColor = .orange
+        default:
+            exitMessage = "⚠️ User exited onboarding\nStatus: \(status)"
+            exitColor = .orange
+        }
+        
+        statusMessage = exitMessage
+        statusColor = exitColor
+        showAlert(title: "Onboarding Exited", message: "Exit reason: \(status)")
     }
     
     private func showAlert(title: String, message: String) {
@@ -133,10 +157,8 @@ struct ContentView: View {
     }
 }
 
-// Onboarding view as a page in the app navigation
+// Onboarding view as a full screen overlay
 struct OnboardingView: View {
-    @Environment(\.presentationMode) var presentationMode
-    
     let token: String
     let env: String
     let onEvent: (Any) -> ()
@@ -150,21 +172,13 @@ struct OnboardingView: View {
             token: token,
             env: env,
             onEvent: onEvent,
-            onSuccess: { customerId in
-                onSuccess(customerId)
-                presentationMode.wrappedValue.dismiss()
-            },
-            onClose: { _ in
-                onClose("Closed")
-                presentationMode.wrappedValue.dismiss()
-            },
+            onSuccess: onSuccess,
+            onClose: onClose,
             onLoad: onLoad,
             onError: onError
         )
-        .navigationTitle("Onboarding")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .navigationBarHidden(true)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.white)
     }
 }
 

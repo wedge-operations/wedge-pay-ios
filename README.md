@@ -2,6 +2,8 @@
 
 A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer component with bidirectional communication capabilities.
 
+**Version**: 1.0.0
+
 ## Features
 
 - 🎯 **Native SwiftUI Integration**: Built with SwiftUI and UIViewRepresentable for modern iOS apps
@@ -17,7 +19,21 @@ A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer 
 
 ## Installation
 
-### Swift Package Manager
+### Swift Package Manager (Recommended)
+
+The Wedge Pay iOS SDK is available via Swift Package Manager, which is the preferred installation method.
+
+#### Option 1: Add Package in Xcode
+
+1. In Xcode, go to **File** → **Add Package Dependencies**
+2. In the search bar, paste the repository URL:
+   ```
+   https://github.com/your-org/wedge-pay-ios.git
+   ```
+3. Click **Add Package**
+4. Select your target and click **Add Package**
+
+#### Option 2: Add to Package.swift
 
 Add the following dependency to your `Package.swift` file:
 
@@ -27,10 +43,11 @@ dependencies: [
 ]
 ```
 
-Or add it directly in Xcode:
-1. Go to File → Add Package Dependencies
-2. Enter the repository URL: `https://github.com/your-org/wedge-pay-ios.git`
-3. Select the version you want to use
+### Manual Installation (Not Recommended)
+
+1. Clone the repository: `git clone https://github.com/your-org/wedge-pay-ios.git`
+2. Drag the `Sources/wedge_pay_ios` folder into your Xcode project
+3. Ensure the files are added to your target
 
 ## Quick Start
 
@@ -118,6 +135,20 @@ struct ContentView: View {
     }
 }
 ```
+
+## Example Project
+
+The repository includes a complete example project (`WedgeExample/`) that demonstrates how to integrate the SDK using Swift Package Manager. The example shows:
+
+- Basic SDK integration
+- Handling all callback scenarios
+- Error handling and user feedback
+- Custom presentation with bottom slide transition
+
+To run the example:
+1. Open `WedgeExample/WedgeExample.xcodeproj` in Xcode
+2. Build and run the project
+3. Use the demo token to test the onboarding flow
 
 ## API Reference
 

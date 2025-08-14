@@ -1,6 +1,9 @@
 import SwiftUI
 import WebKit
 
+// SDK Version
+public let WEDGE_PAY_IOS_VERSION = "1.0.0"
+
 var environments = ["integration": "https://onboarding-integration.wedge-can.com",
                     "sandbox": "https://onboarding-sandbox.wedge-can.com",
                     "production": "https://onboarding-production.wedge-can.com"]
@@ -119,6 +122,8 @@ public struct WedgePayIOS: UIViewRepresentable {
             switch message.name {
                 case "onError":
                     wrapper.onError(message.body)
+                    // Automatically trigger onClose when an error occurs to allow SDK exit
+                    wrapper.onClose("error_exit")
                 case "onEvent":
                     wrapper.onEvent(message.body)
                 case "onSuccess":
@@ -159,11 +164,15 @@ public struct WedgePayIOS: UIViewRepresentable {
         public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             print("WebView navigation failed: \(error.localizedDescription)")
             wrapper.onError("Navigation failed: \(error.localizedDescription)")
+            // Allow SDK exit on navigation failure
+            wrapper.onClose("navigation_error")
         }
         
         public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             print("WebView provisional navigation failed: \(error.localizedDescription)")
             wrapper.onError("Provisional navigation failed: \(error.localizedDescription)")
+            // Allow SDK exit on provisional navigation failure
+            wrapper.onClose("provisional_navigation_error")
         }
         
         public func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {

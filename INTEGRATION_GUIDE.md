@@ -106,17 +106,17 @@ struct OnboardingView: View {
                         showingOnboarding = false
                         handleOnboardingSuccess(customerId: customerId)
                     },
-                    onClose: { _ in
-                        statusMessage = "⚠️ User closed onboarding"
+                    onClose: { reason in
+                        statusMessage = "⚠️ SDK exited: \(reason)"
                         showingOnboarding = false
-                        handleOnboardingExit()
+                        handleOnboardingExit(reason: reason)
                     },
                     onLoad: { url in
                         print("Loaded: \(url)")
                     },
                     onError: { error in
+                        // Note: onClose will be automatically called when onError occurs
                         statusMessage = "❌ Error: \(error)"
-                        showingOnboarding = false
                         handleOnboardingError(error: "\(error)")
                     }
                 )
@@ -144,9 +144,18 @@ struct OnboardingView: View {
         print("Onboarding failed with error: \(error)")
     }
     
-    private func handleOnboardingExit() {
-        // Track analytics or handle exit
-        print("User exited onboarding")
+    private func handleOnboardingExit(reason: String) {
+        // Track analytics or handle exit based on reason
+        switch reason {
+        case "error_exit":
+            print("Onboarding failed and SDK exited")
+        case "navigation_error", "provisional_navigation_error":
+            print("Network error caused SDK exit")
+        case "user_cancelled":
+            print("User cancelled onboarding")
+        default:
+            print("SDK exited with reason: \(reason)")
+        }
     }
 }
 ```
@@ -319,6 +328,14 @@ WedgePayIOS(
 
 ## Error Handling
 
+### Automatic SDK Exit on Errors
+
+The SDK automatically exits when onboarding fails to prevent users from being stuck in a failed onboarding flow. When an error occurs:
+
+1. The `onError` callback is triggered with the error details
+2. The `onClose` callback is automatically triggered with reason `"error_exit"`
+3. The SDK view is dismissed, allowing users to return to your app
+
 ### Common Error Codes
 
 | Error Code | Description | Recommended Action |
@@ -343,6 +360,25 @@ private func handleOnboardingError(error: String) {
         showRetryAlert(message: "Request timed out. Please try again.")
     default:
         showRetryAlert(message: "An error occurred. Please try again.")
+    }
+}
+
+private func handleOnboardingExit(reason: String) {
+    switch reason {
+    case "error_exit":
+        // Handle error-related exit
+        print("Onboarding failed and SDK exited")
+        // Show retry option or alternative flow
+    case "navigation_error", "provisional_navigation_error":
+        // Handle network/loading errors
+        print("Network error caused SDK exit")
+        // Check connectivity and offer retry
+    case "user_cancelled":
+        // Handle user-initiated exit
+        print("User cancelled onboarding")
+        // Track analytics or show exit confirmation
+    default:
+        print("SDK exited with reason: \(reason)")
     }
 }
 
