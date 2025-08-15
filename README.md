@@ -140,15 +140,18 @@ struct ContentView: View {
 
 The repository includes a complete example project (`WedgeExample/`) that demonstrates how to integrate the SDK using Swift Package Manager. The example shows:
 
-- Basic SDK integration
-- Handling all callback scenarios
-- Error handling and user feedback
-- Custom presentation with bottom slide transition
+- **SDK Integration**: How to import and use the `WedgePayIOS` component
+- **Callback Handling**: Examples of all SDK callbacks (onSuccess, onError, onClose, etc.)
+- **Error Handling**: Comprehensive error handling and user feedback
+- **Environment Switching**: Support for sandbox and production environments
 
 To run the example:
 1. Open `WedgeExample/WedgeExample.xcodeproj` in Xcode
-2. Build and run the project
-3. Use the demo token to test the onboarding flow
+2. Add the Swift Package dependency (see `WedgeExample/README.md` for detailed setup)
+3. Build and run the project
+4. Pass in onboarding token to test the onboarding flow
+
+**Note**: The example project is configured to use Swift Package Manager, demonstrating the proper integration method for production use.
 
 ## API Reference
 
