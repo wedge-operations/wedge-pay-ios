@@ -4,6 +4,7 @@ import wedge_pay_ios
 struct ContentView: View {
     @State private var token: String = "demo-token-123"
     @State private var selectedEnvironment: String = "sandbox"
+    @State private var selectedType: String = "onboarding"
     @State private var statusMessage: String = "Ready to start onboarding"
     @State private var statusColor: Color = .primary
     @State private var showingAlert = false
@@ -12,6 +13,7 @@ struct ContentView: View {
     @State private var showingOnboarding = false
     
     private let environments = ["integration", "sandbox", "production"]
+    private let types = ["onboarding", "funding"]
     
     var body: some View {
         ZStack {
@@ -40,6 +42,28 @@ struct ContentView: View {
                     }
                     .padding(.horizontal)
                     
+                    // Type Picker
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Flow Type")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Picker("Type", selection: $selectedType) {
+                            ForEach(types, id: \.self) { type in
+                                Text(type.capitalized).tag(type)
+                            }
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                    }
+                    .padding(.horizontal)
+                    
+                    // Type Description
+                    Text(typeDescription)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
                     // Token Text Field
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Onboarding Token")
@@ -59,7 +83,7 @@ struct ContentView: View {
                         }
                         showingOnboarding = true
                     }) {
-                        Text("Start Onboarding")
+                        Text("Start \(selectedType.capitalized)")
                             .font(.headline)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -86,6 +110,7 @@ struct ContentView: View {
                 OnboardingView(
                     token: token,
                     env: selectedEnvironment,
+                    type: selectedType,
                     onEvent: { event in
                         print("Event: \(event)")
                     },
@@ -110,6 +135,17 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: showingOnboarding)
+    }
+    
+    private var typeDescription: String {
+        switch selectedType {
+        case "onboarding":
+            return "Complete onboarding flow for new users"
+        case "funding":
+            return "Streamlined flow for existing users adding funding sources"
+        default:
+            return ""
+        }
     }
     
     private func handleOnboardingSuccess(customerId: String) {
@@ -161,6 +197,7 @@ struct ContentView: View {
 struct OnboardingView: View {
     let token: String
     let env: String
+    let type: String
     let onEvent: (Any) -> ()
     let onSuccess: (String) -> ()
     let onClose: (Any) -> ()
@@ -171,6 +208,7 @@ struct OnboardingView: View {
         WedgePayIOS(
             token: token,
             env: env,
+            type: type,
             onEvent: onEvent,
             onSuccess: onSuccess,
             onClose: onClose,

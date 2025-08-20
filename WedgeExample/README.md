@@ -29,6 +29,41 @@ Open `WedgeExample.xcodeproj` in Xcode.
 - **Error Handling**: Comprehensive error handling and user feedback
 - **Environment Switching**: Support for integration, sandbox, and production environments
 
+## Type Parameter Functionality
+
+The SDK now supports a `type` parameter that determines the onboarding flow:
+
+### Available Types
+
+- **`"onboarding"`** (default): Complete onboarding flow for new users
+- **`"funding"`**: Streamlined flow for existing users adding funding sources
+
+### Usage Examples
+
+```swift
+// For new user onboarding
+WedgePayIOS(
+    token: "your-token",
+    env: "sandbox",
+    type: "onboarding", // Full onboarding flow
+    // ... other parameters
+)
+
+// For existing users adding funding
+WedgePayIOS(
+    token: "your-token",
+    env: "sandbox", 
+    type: "funding", // Funding-focused flow
+    // ... other parameters
+)
+```
+
+### Backward Compatibility
+
+- Existing code continues to work without changes
+- `type` parameter defaults to `"onboarding"` if not specified
+- No breaking changes to existing implementations
+
 ## Features
 
 - **Demo Token**: Uses a demo token for testing
