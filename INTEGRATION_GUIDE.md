@@ -1,10 +1,8 @@
-# Wedge Pay iOS Integration Guide
-
-This guide provides detailed instructions for integrating the Wedge iOS SDK into your SwiftUI iOS application.
+# Wedge Pay iOS SDK Integration Guide
 
 ## Overview
 
-The Wedge iOS SDK provides a SwiftUI component that hosts your onboarding webapp with bidirectional communication capabilities. The SDK handles the presentation, dismissal, and communication between your native app and the webapp using modern SwiftUI patterns.
+The Wedge Pay iOS SDK now supports a `type` parameter that determines the behavior and flow of the onboarding experience. This enhancement allows developers to provide different user experiences based on whether the user is new to the platform or an existing user who needs to add funding sources.
 
 ## Prerequisites
 
@@ -28,513 +26,317 @@ The Wedge iOS SDK provides a SwiftUI component that hosts your onboarding webapp
 2. Drag the `Sources/wedge_pay_ios` folder into your Xcode project
 3. Ensure the files are added to your target
 
-## Basic Integration
+### Available Types
 
-### 1. Import the SDK
+- **`"onboarding"`** (default): Complete onboarding flow for new users
+  - Full identity verification
+  - Account setup and configuration
+  - Complete onboarding experience
+- **`"funding"`**: Streamlined flow for existing users
+  - Focused on adding payment methods
+  - Funding source management
+  - Relink funding accounts
+
+### Behavior Changes
+
+| Type | User Experience | Flow Focus | Use Case |
+|------|----------------|------------|----------|
+| `onboarding` | Complete setup | Full onboarding | New users, first-time setup |
+| `funding` | Streamlined | Payment methods | Existing users, add funding |
+
+### URL Construction
+
+The SDK automatically appends the type parameter to the webapp URL:
+
+```
+https://{environment}.wedge-can.com?onboardingToken={token}&type={type}
+```
+
+**Examples:**
+- Onboarding: `https://sandbox.wedge-can.com?onboardingToken=abc123&type=onboarding`
+- Funding: `https://sandbox.wedge-can.com?onboardingToken=abc123&type=funding`
+
+## Implementation
+
+### Swift SDK Integration
+
+#### Basic Usage
 
 ```swift
 import SwiftUI
 import WedgePayIOS
-```
 
-### 2. Use the SwiftUI View
-
-```swift
+// For new user onboarding
 WedgePayIOS(
     token: "your-onboarding-token",
-    env: "sandbox", // Use "production" for live environment
-    theme: "light", // or "dark"
+    env: "sandbox",
+    type: "onboarding", // Full onboarding flow
     onEvent: { event in
-        // Handle general events
         print("Event: \(event)")
     },
     onSuccess: { customerId in
-        // Handle successful onboarding completion
-        print("Onboarding completed for customer: \(customerId)")
-        // Update your app state, navigate to next screen, etc.
+        print("Onboarding completed: \(customerId)")
     },
     onClose: { _ in
-        // Handle user close/cancel
         print("User closed onboarding")
-        // Track analytics, show exit confirmation, etc.
     },
     onLoad: { url in
-        // Handle webapp load
         print("Webapp loaded: \(url)")
     },
     onError: { error in
-        // Handle errors
-        print("Onboarding error: \(error)")
-        // Show error message, retry, etc.
+        print("Error: \(error)")
+    }
+)
+
+// For existing users adding funding
+WedgePayIOS(
+    token: "your-onboarding-token",
+    env: "sandbox",
+    type: "funding", // Funding-focused flow
+    onEvent: { event in
+        print("Event: \(event)")
+    },
+    onSuccess: { customerId in
+        print("Funding setup completed: \(customerId)")
+    },
+    onClose: { _ in
+        print("User closed funding setup")
+    },
+    onLoad: { url in
+        print("Webapp loaded: \(url)")
+    },
+    onError: { error in
+        print("Error: \(error)")
     }
 )
 ```
 
-## Complete Integration Example
+#### Dynamic Type Selection
 
 ```swift
-import SwiftUI
-import WedgePayIOS
-
-struct OnboardingView: View {
+struct ContentView: View {
+    @State private var userType: String = "onboarding"
     @State private var showingOnboarding = false
-    @State private var statusMessage = "Ready to start onboarding"
-    @State private var customerId: String?
     
     var body: some View {
-        VStack(spacing: 20) {
-            Text(statusMessage)
-                .font(.headline)
-                .multilineTextAlignment(.center)
-                .padding()
+        VStack {
+            // Type selection
+            Picker("Flow Type", selection: $userType) {
+                Text("New User").tag("onboarding")
+                Text("Existing User").tag("funding")
+            }
+            .pickerStyle(SegmentedPickerStyle())
             
-            Button("Start Onboarding") {
+            Button("Start \(userType.capitalized)") {
                 showingOnboarding = true
             }
-            .buttonStyle(.borderedProminent)
-            .sheet(isPresented: $showingOnboarding) {
-                WedgePayIOS(
-                    token: "your-onboarding-token-here",
-                    env: "sandbox",
-                    theme: "light",
-                    onEvent: { event in
-                        print("Event: \(event)")
-                    },
-                    onSuccess: { customerId in
-                        self.customerId = customerId
-                        statusMessage = "✅ Success! Customer ID: \(customerId)"
-                        showingOnboarding = false
-                        handleOnboardingSuccess(customerId: customerId)
-                    },
-                    onClose: { reason in
-                        statusMessage = "⚠️ SDK exited: \(reason)"
-                        showingOnboarding = false
-                        handleOnboardingExit(reason: reason)
-                    },
-                    onLoad: { url in
-                        print("Loaded: \(url)")
-                    },
-                    onError: { error in
-                        // Note: onClose will be automatically called when onError occurs
-                        statusMessage = "❌ Error: \(error)"
-                        handleOnboardingError(error: "\(error)")
-                    }
-                )
-            }
-            
-            if let customerId = customerId {
-                Text("Customer ID: \(customerId)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
         }
-        .padding()
-    }
-    
-    private func handleOnboardingSuccess(customerId: String) {
-        // Store customer ID
-        UserDefaults.standard.set(customerId, forKey: "wedgeCustomerId")
-        
-        // Navigate to success screen or update app state
-        print("Onboarding completed successfully")
-    }
-    
-    private func handleOnboardingError(error: String) {
-        // Show error alert or handle error
-        print("Onboarding failed with error: \(error)")
-    }
-    
-    private func handleOnboardingExit(reason: String) {
-        // Track analytics or handle exit based on reason
-        switch reason {
-        case "error_exit":
-            print("Onboarding failed and SDK exited")
-        case "navigation_error", "provisional_navigation_error":
-            print("Network error caused SDK exit")
-        case "user_cancelled":
-            print("User cancelled onboarding")
-        default:
-            print("SDK exited with reason: \(reason)")
+        .sheet(isPresented: $showingOnboarding) {
+            WedgePayIOS(
+                token: "your-token",
+                env: "sandbox",
+                type: userType, // Dynamic type selection
+                onEvent: { event in
+                    print("Event: \(event)")
+                },
+                onSuccess: { customerId in
+                    print("Success: \(customerId)")
+                    showingOnboarding = false
+                },
+                onClose: { _ in
+                    showingOnboarding = false
+                },
+                onLoad: { url in
+                    print("Loaded: \(url)")
+                },
+                onError: { error in
+                    print("Error: \(error)")
+                    showingOnboarding = false
+                }
+            )
         }
     }
 }
 ```
 
-## WebApp Communication
+### API Reference
 
-Your webapp needs to communicate with the native SDK using the provided JavaScript API.
-
-### JavaScript API
-
-The SDK automatically injects a global `window.wedgeOnboarding` object into your webapp.
-
-```javascript
-// Check if the bridge is available
-if (window.wedgeOnboarding) {
-    console.log('Wedge iOS SDK bridge is ready');
-} else {
-    console.log('Wedge iOS SDK bridge not available');
-}
-```
-
-### Sending Events
-
-```javascript
-// Success event - call when onboarding completes successfully
-window.wedgeOnboarding.postMessage({
-    event: "onSuccess",
-    customerId: "customer-123"
-});
-
-// Error event - call when identity verification fails
-window.wedgeOnboarding.postMessage({
-    event: "onError",
-    errorCode: "verification_failed"
-});
-
-// Close event - call when user closes/cancels
-window.wedgeOnboarding.postMessage({
-    event: "onClose",
-    reason: "user_cancelled"
-});
-```
-
-### Event Reference
-
-| Event | Description | Required Fields |
-|-------|-------------|-----------------|
-| `onSuccess` | Onboarding completed successfully | `customerId` (String) |
-| `onError` | Identity verification failed | `errorCode` (String) |
-| `onClose` | User closed/cancelled | `reason` (String, optional) |
-
-### Example WebApp Integration
-
-```javascript
-// In your webapp
-class OnboardingFlow {
-    constructor() {
-        this.customerId = null;
-        this.setupBridge();
-    }
-    
-    setupBridge() {
-        // Wait for bridge to be available
-        const checkBridge = () => {
-            if (window.wedgeOnboarding) {
-                console.log('Bridge ready');
-                this.bridge = window.wedgeOnboarding;
-            } else {
-                setTimeout(checkBridge, 100);
-            }
-        };
-        checkBridge();
-    }
-    
-    completeOnboarding(customerId) {
-        this.customerId = customerId;
-        
-        if (this.bridge) {
-            this.bridge.postMessage({
-                event: "onSuccess",
-                customerId: customerId
-            });
-        } else {
-            console.error('Bridge not available');
-        }
-    }
-    
-    handleError(errorCode) {
-        if (this.bridge) {
-            this.bridge.postMessage({
-                event: "onError",
-                errorCode: errorCode
-            });
-        }
-    }
-    
-    closeOnboarding(reason = "user_cancelled") {
-        if (this.bridge) {
-            this.bridge.postMessage({
-                event: "onClose",
-                reason: reason
-            });
-        }
-    }
-}
-
-// Usage
-const onboarding = new OnboardingFlow();
-
-// When user completes onboarding
-onboarding.completeOnboarding("customer-123");
-
-// When verification fails
-onboarding.handleError("verification_failed");
-
-// When user closes
-onboarding.closeOnboarding("user_cancelled");
-```
-
-## Environment Configuration
-
-### Available Environments
+#### WedgePayIOS Initializer
 
 ```swift
-var environments = [
-    "integration": "https://onboarding-integration.wedge-can.com",
-    "sandbox": "https://onboarding-sandbox.wedge-can.com",
-    "production": "https://onboarding-production.wedge-can.com"
-]
-```
-
-### Integration Environment
-
-Use the integration environment for development and testing:
-
-```swift
-WedgePayIOS(
-    token: "integration-token",
-    env: "integration",
-    theme: "light",
-    // ... callbacks
+public init(
+    shouldDismiss: Bool = false,
+    token: String,
+    env: String,
+    type: String = "onboarding", // New parameter
+    onEvent: @escaping (Any) -> Void,
+    onSuccess: @escaping (String) -> Void,
+    onClose: @escaping (Any) -> Void,
+    onLoad: @escaping (Any) -> Void,
+    onError: @escaping (Any) -> Void
 )
 ```
 
-### Sandbox Environment
+#### Parameters
 
-Use the sandbox environment for testing:
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `token` | String | Required | Your onboarding token |
+| `env` | String | Required | Environment ("integration", "sandbox", "production") |
+| `type` | String | "onboarding" | Flow type ("onboarding" or "funding") |
+| `onEvent` | Closure | Required | General event handler |
+| `onSuccess` | Closure | Required | Success completion handler |
+| `onClose` | Closure | Required | Close/cancel handler |
+| `onLoad` | Closure | Required | Webapp load handler |
+| `onError` | Closure | Required | Error handler |
+
+## Backward Compatibility
+
+### Existing Code
+
+**All existing implementations continue to work without changes.** The `type` parameter defaults to `"onboarding"`, maintaining the current behavior for existing code.
 
 ```swift
+// This existing code continues to work exactly as before
 WedgePayIOS(
-    token: "sandbox-token",
+    token: "your-token",
     env: "sandbox",
-    theme: "light",
-    // ... callbacks
+    // type defaults to "onboarding"
+    onEvent: { event in ... },
+    onSuccess: { customerId in ... },
+    onClose: { _ in ... },
+    onLoad: { url in ... },
+    onError: { error in ... }
 )
 ```
 
-### Production Environment
+### Migration Path
 
-Use the production environment for live applications:
+#### For Existing SDKs
 
-```swift
-WedgePayIOS(
-    token: "production-token",
-    env: "production",
-    theme: "light",
-    // ... callbacks
-)
-```
+1. **No immediate action required** - existing code continues to work
+2. **Optional enhancement** - add type parameter when ready
+3. **Gradual rollout** - implement type selection based on user context
 
-## Error Handling
+#### For New SDKs
 
-### Automatic SDK Exit on Errors
-
-The SDK automatically exits when onboarding fails to prevent users from being stuck in a failed onboarding flow. When an error occurs:
-
-1. The `onError` callback is triggered with the error details
-2. The `onClose` callback is automatically triggered with reason `"error_exit"`
-3. The SDK view is dismissed, allowing users to return to your app
-
-### Common Error Codes
-
-| Error Code | Description | Recommended Action |
-|------------|-------------|-------------------|
-| `verification_failed` | Identity verification failed | Retry verification |
-| `document_invalid` | Document is invalid or unclear | Request new document |
-| `network_error` | Network connectivity issue | Check connection and retry |
-| `timeout` | Request timed out | Retry the operation |
-
-### Error Handling Best Practices
-
-```swift
-private func handleOnboardingError(error: String) {
-    switch error {
-    case let e where e.contains("verification_failed"):
-        showRetryAlert(message: "Identity verification failed. Please try again.")
-    case let e where e.contains("document_invalid"):
-        showRetryAlert(message: "Document is unclear. Please upload a clearer image.")
-    case let e where e.contains("network_error"):
-        showRetryAlert(message: "Network error. Please check your connection and try again.")
-    case let e where e.contains("timeout"):
-        showRetryAlert(message: "Request timed out. Please try again.")
-    default:
-        showRetryAlert(message: "An error occurred. Please try again.")
-    }
-}
-
-private func handleOnboardingExit(reason: String) {
-    switch reason {
-    case "error_exit":
-        // Handle error-related exit
-        print("Onboarding failed and SDK exited")
-        // Show retry option or alternative flow
-    case "navigation_error", "provisional_navigation_error":
-        // Handle network/loading errors
-        print("Network error caused SDK exit")
-        // Check connectivity and offer retry
-    case "user_cancelled":
-        // Handle user-initiated exit
-        print("User cancelled onboarding")
-        // Track analytics or show exit confirmation
-    default:
-        print("SDK exited with reason: \(reason)")
-    }
-}
-
-private func showRetryAlert(message: String) {
-    // In SwiftUI, you can use @State to show alerts
-    // or integrate with your alert system
-    print("Error: \(message)")
-}
-```
+1. **Implement type selection logic** - determine user context
+2. **Add type parameter** - pass appropriate type value
+3. **Test both flows** - ensure proper behavior for each type
 
 ## Testing
 
-### Unit Testing
+### Test URLs
+
+Use these test URLs to verify the type parameter functionality:
+
+#### Integration Environment
+- Onboarding: `https://onboarding-integration.wedge-can.com?onboardingToken=test&type=onboarding`
+- Funding: `https://onboarding-integration.wedge-can.com?onboardingToken=test&type=funding`
+
+#### Sandbox Environment
+- Onboarding: `https://onboarding-sandbox.wedge-can.com?onboardingToken=test&type=onboarding`
+- Funding: `https://onboarding-sandbox.wedge-can.com?onboardingToken=test&type=funding`
+
+### Expected Behavior
+
+| Test Case | Expected Result |
+|-----------|-----------------|
+| `type=onboarding` | Full onboarding flow |
+| `type=funding` | Streamlined funding flow |
+| Missing type parameter | Defaults to onboarding flow |
+| Invalid type value | Falls back to onboarding flow |
+
+## Error Handling
+
+### Type Parameter Errors
+
+- **Invalid type values**: Automatically fall back to `"onboarding"`
+- **Missing type parameter**: Defaults to `"onboarding"`
+- **Network errors**: Standard error handling applies
+
+### Error Scenarios
 
 ```swift
-import XCTest
-@testable import wedge_pay_ios
-
-class WedgeIOSSDKTests: XCTestCase {
-    
-    func testSDKInitialization() {
-        var successCalled = false
-        var errorCalled = false
-        var closeCalled = false
-        
-        let sdk = WedgePayIOS(
-            token: "test-token",
-            env: "sandbox",
-            theme: "light",
-            onEvent: { _ in },
-            onSuccess: { _ in successCalled = true },
-            onClose: { _ in closeCalled = true },
-            onLoad: { _ in },
-            onError: { _ in errorCalled = true }
-        )
-        
-        XCTAssertNotNil(sdk)
-        XCTAssertEqual(sdk.token, "test-token")
-        XCTAssertEqual(sdk.env, "sandbox")
-        XCTAssertEqual(sdk.theme, "light")
-    }
-    
-    func testCallbacks() {
-        var successCalled = false
-        var errorCalled = false
-        var closeCalled = false
-        
-        let sdk = WedgePayIOS(
-            token: "test-token",
-            env: "sandbox",
-            theme: "light",
-            onEvent: { _ in },
-            onSuccess: { _ in successCalled = true },
-            onClose: { _ in closeCalled = true },
-            onLoad: { _ in },
-            onError: { _ in errorCalled = true }
-        )
-        
-        sdk.onSuccess("test-customer")
-        sdk.onError("test-error")
-        sdk.onClose("test-close")
-        
-        XCTAssertTrue(successCalled)
-        XCTAssertTrue(errorCalled)
-        XCTAssertTrue(closeCalled)
+onError: { error in
+    if let errorString = error as? String {
+        switch errorString {
+        case let str where str.contains("type"):
+            print("Type parameter error: \(str)")
+        case let str where str.contains("network"):
+            print("Network error: \(str)")
+        default:
+            print("General error: \(str)")
+        }
     }
 }
 ```
 
-### Integration Testing
+## Best Practices
 
-1. Use the provided example app to test the SDK
-2. Test all environments (integration, sandbox, production)
-3. Test all callback scenarios (success, error, close)
-4. Test network connectivity issues
-5. Test different onboarding tokens
-6. Test theme switching (light/dark)
-
-## Troubleshooting
-
-### Common Issues
-
-**SDK not initializing**
-- Ensure you're using iOS 14.0 or later
-- Check that the package is properly added to your target
-- Verify the import statement is correct
-
-**Webapp not loading**
-- Check the onboarding token is valid
-- Verify the environment configuration
-- Ensure network connectivity
-
-**Communication not working**
-- Check that the JavaScript bridge is properly injected
-- Verify the message format is correct
-- Ensure the webapp is calling the correct API
-
-**Build errors**
-- Update to the latest version of the SDK
-- Check Xcode and Swift versions
-- Clean and rebuild the project
-
-**SwiftUI integration issues**
-- Ensure you're using SwiftUI properly
-- Check that the view is presented correctly
-- Verify state management is working
-
-### Getting Help
-
-If you encounter issues:
-
-1. Check the [README.md](README.md) for basic usage
-2. Review the example app for implementation details
-3. Create an issue in the repository with:
-   - iOS version
-   - Xcode version
-   - Error message
-   - Steps to reproduce
-
-## Security Considerations
-
-- Never hardcode onboarding tokens in your app
-- Store tokens securely (e.g., in Keychain)
-- Use environment-specific tokens
-- Validate all data received from the webapp
-- Implement proper error handling
-
-## Analytics and Tracking
-
-Consider implementing analytics to track:
-
-- Onboarding completion rates
-- Drop-off points
-- Error frequencies
-- User journey patterns
+### Type Selection Logic
 
 ```swift
-private func trackOnboardingEvent(_ event: String, properties: [String: Any]) {
-    Analytics.track("wedge_onboarding_\(event)", properties: properties)
+func determineUserType(user: User) -> String {
+    if user.hasCompletedOnboarding {
+        return "funding"
+    } else {
+        return "onboarding"
+    }
 }
 
-// Usage
-trackOnboardingEvent("started", properties: [:])
-trackOnboardingEvent("completed", properties: ["customer_id": customerId])
-trackOnboardingEvent("failed", properties: ["error_code": errorCode])
-trackOnboardingEvent("closed", properties: ["reason": reason])
+func determineUserTypeFromContext(context: OnboardingContext) -> String {
+    switch context {
+    case .newUser:
+        return "onboarding"
+    case .existingUser:
+        return "funding"
+    case .returningUser:
+        return "funding"
+    }
+}
 ```
+
+### User Experience
+
+1. **Clear labeling**: Use descriptive text for type selection
+2. **Context awareness**: Automatically select type based on user state
+3. **Fallback handling**: Always provide a default experience
+4. **User feedback**: Explain what each flow type means
+
+### Performance Considerations
+
+1. **Lazy loading**: Only load the appropriate flow type
+2. **Caching**: Cache user type selection when appropriate
+3. **Analytics**: Track which flow types are used most
+
+## Version Information
+
+- **SDK Version**: 1.1.0
+- **Minimum iOS Version**: 14.0+
+- **Swift Version**: 5.9+
+- **Xcode Version**: 15.0+
 
 ## Support
 
-For technical support and questions:
+For questions about implementing the type parameter functionality:
 
-- Create an issue in the repository
-- Contact the Wedge team
-- Check the documentation and examples
+1. **Documentation**: Check this integration guide
+2. **Example Project**: Review `WedgeExample/` project
+3. **Issues**: Create an issue in the repository
+4. **Team Support**: Contact the Wedge team directly
 
----
+## Changelog
 
-This integration guide should help you successfully integrate the Wedge iOS SDK into your SwiftUI iOS application. For additional support, please refer to the main [README.md](README.md) or contact the Wedge team. 
+### Version 1.1.0
+- ✨ **NEW**: Added `type` parameter support
+- ✨ **NEW**: Support for "onboarding" and "funding" flow types
+- 🔄 **ENHANCED**: URL construction includes type parameter
+- ✅ **BACKWARD COMPATIBLE**: Existing code continues to work
+- 📚 **DOCUMENTATION**: Comprehensive integration guide
+
+### Version 1.0.0
+- 🎯 **INITIAL**: First release of Wedge Pay iOS SDK
+- 🎨 **FEATURE**: Native SwiftUI integration
+- 🔄 **FEATURE**: Bidirectional communication
+- ⚙️ **FEATURE**: Multi-environment support 

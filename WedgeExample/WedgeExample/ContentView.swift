@@ -66,11 +66,11 @@ struct ContentView: View {
                     
                     // Token Text Field
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Onboarding Token")
+                        Text("\(selectedType.capitalized) Token")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                         
-                        TextField("Enter onboarding token", text: $token)
+                        TextField("Enter \(selectedType) token", text: $token)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                     }
                     .padding(.horizontal)

@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 // SDK Version
-public let WEDGE_PAY_IOS_VERSION = "1.0.0"
+public let WEDGE_PAY_IOS_VERSION = "1.1.0"
 
 var environments = ["integration": "https://onboarding-integration.wedge-can.com",
                     "sandbox": "https://onboarding-sandbox.wedge-can.com",
@@ -13,15 +13,17 @@ var environments = ["integration": "https://onboarding-integration.wedge-can.com
 public struct WedgePayIOS: UIViewRepresentable {
     var token: String
     var env: String
+    var type: String
     var onEvent: (Any) -> ()
     var onSuccess: (String) -> ()
     var onClose: (Any) -> ()
     var onLoad: (Any) -> ()
     var onError: (Any) -> ()
     
-    public init(token: String, env: String, onEvent: @escaping (Any) -> Void, onSuccess: @escaping (String) -> Void, onClose: @escaping (Any) -> Void, onLoad: @escaping (Any) -> Void, onError: @escaping (Any) -> Void) {
+    public init(token: String, env: String, type: String = "onboarding", onEvent: @escaping (Any) -> Void, onSuccess: @escaping (String) -> Void, onClose: @escaping (Any) -> Void, onLoad: @escaping (Any) -> Void, onError: @escaping (Any) -> Void) {
         self.token = token
         self.env = env
+        self.type = type
         self.onEvent = onEvent
         self.onSuccess = onSuccess
         self.onClose = onClose
@@ -88,13 +90,13 @@ public struct WedgePayIOS: UIViewRepresentable {
             print("Error: Environment '\(env)' not found. Available environments: \(environments.keys.joined(separator: ", "))")
             // Fallback to sandbox if environment is invalid
             let fallbackUrl = environments["sandbox"]!
-            let url = URL(string: "\(fallbackUrl)?onboardingToken=\(token)")
+            let url = URL(string: "\(fallbackUrl)?onboardingToken=\(token)&type=\(type)")
             let request = URLRequest(url: url!)
             webView.load(request)
             return webView
         }
         
-        let url = URL(string: "\(environmentUrl)?onboardingToken=\(token)")
+        let url = URL(string: "\(environmentUrl)?onboardingToken=\(token)&type=\(type)")
 
         let request = URLRequest(url: url!)
         webView.load(request)

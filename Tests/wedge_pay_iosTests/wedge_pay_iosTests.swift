@@ -25,7 +25,7 @@ final class WedgePayIOSTests: XCTestCase {
         let sdk = WedgePayIOS(
             token: "test-token-123",
             env: "sandbox",
-            theme: "light",
+            type: "onboarding",
             onEvent: { event in
                 eventCalled = true
                 XCTAssertNotNil(event)
