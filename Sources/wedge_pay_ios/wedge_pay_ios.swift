@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 // SDK Version
-public let WEDGE_PAY_IOS_VERSION = "1.0.0"
+public let WEDGE_PAY_IOS_VERSION = "1.1.0"
 
 var environments = ["integration": "https://onboarding-integration.wedge-can.com",
                     "sandbox": "https://onboarding-sandbox.wedge-can.com",
