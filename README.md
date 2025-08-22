@@ -2,7 +2,7 @@
 
 A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer component with bidirectional communication capabilities.
 
-**Version**: 1.0.0
+**Version**: 1.1.0
 
 ## Features
 
@@ -16,6 +16,46 @@ A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer 
 - 🔄 **Error Handling**: Comprehensive error handling with retry mechanisms
 - 🧹 **Memory Management**: Proper cleanup and memory leak prevention
 
+## Type Parameter Functionality
+
+The SDK now supports a `type` parameter that determines the behavior and flow of the onboarding experience:
+
+### Available Types
+
+- **`"onboarding"`** (default): Full onboarding flow for new users
+- **`"funding"`**: Streamlined flow for existing users who need to add funding sources
+
+### Behavior Changes
+
+- **Onboarding Mode**: Complete identity verification and account setup
+- **Funding Mode**: Focused on adding payment methods and relinking funding sources
+
+
+### Implementation
+
+```swift
+// For new user onboarding
+WedgePayIOS(
+    token: "your-token",
+    env: "sandbox",
+    type: "onboarding", // Full onboarding flow
+    // ... other parameters
+)
+
+// For existing users making changes to linked funding accounts
+WedgePayIOS(
+    token: "your-token", 
+    env: "sandbox",
+    type: "funding", // Funding-focused flow
+    // ... other parameters
+)
+```
+
+### Backward Compatibility
+
+- Existing code continues to work without changes
+- `type` parameter defaults to `"onboarding"` if not specified
+- No breaking changes to existing implementations
 
 ## Installation
 
@@ -64,7 +104,7 @@ import WedgePayIOS
 WedgePayIOS(
     token: "your-onboarding-token",
     env: "sandbox", // or "integration", "production"
-    theme: "light", // or "dark"
+    type: "onboarding", // or "funding" for changes to linked bank accounts
     onEvent: { event in
         // Handle general events
         print("Event: \(event)")
@@ -110,7 +150,7 @@ struct ContentView: View {
                 WedgePayIOS(
                     token: "your-onboarding-token-here",
                     env: "sandbox",
-                    theme: "light",
+                    type: "onboarding", // or "funding" for changes to linked bank accounts
                     onEvent: { event in
                         print("Event: \(event)")
                     },
@@ -165,7 +205,7 @@ public struct WedgePayIOS: UIViewRepresentable {
         shouldDismiss: Bool = false,
         token: String,
         env: String,
-        theme: String = "light",
+        type: String = "onboarding",
         onEvent: @escaping (Any) -> Void,
         onSuccess: @escaping (String) -> Void,
         onClose: @escaping (Any) -> Void,
@@ -179,7 +219,7 @@ public struct WedgePayIOS: UIViewRepresentable {
 
 - `token`: Your onboarding token
 - `env`: Environment ("integration", "sandbox", "production")
-- `theme`: UI theme ("light" or "dark")
+- `type`: Flow type ("onboarding" for new users, "funding" for existing user bank adjustments)
 - `onEvent`: Called for general events
 - `onSuccess`: Called when onboarding completes successfully
 - `onClose`: Called when user closes/cancels
