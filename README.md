@@ -68,7 +68,7 @@ The Wedge Pay iOS SDK is available via Swift Package Manager, which is the prefe
 1. In Xcode, go to **File** → **Add Package Dependencies**
 2. In the search bar, paste the repository URL:
    ```
-   https://github.com/your-org/wedge-pay-ios.git
+   https://github.com/wedge-operations/wedge-pay-ios.git
    ```
 3. Click **Add Package**
 4. Select your target and click **Add Package**
@@ -79,13 +79,13 @@ Add the following dependency to your `Package.swift` file:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/your-org/wedge-pay-ios.git", from: "1.0.0")
+    .package(url: "https://github.com/wedge-operations/wedge-pay-ios.git", exact: "1.1.0")
 ]
 ```
 
 ### Manual Installation (Not Recommended)
 
-1. Clone the repository: `git clone https://github.com/your-org/wedge-pay-ios.git`
+1. Clone the repository: `git clone https://github.com/wedge-operations/wedge-pay-ios.git`
 2. Drag the `Sources/wedge_pay_ios` folder into your Xcode project
 3. Ensure the files are added to your target
 
