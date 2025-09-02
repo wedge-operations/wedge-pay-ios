@@ -16,13 +16,13 @@ The Wedge Pay iOS SDK now supports a `type` parameter that determines the behavi
 ### Swift Package Manager (Recommended)
 
 1. In Xcode, go to **File** → **Add Package Dependencies**
-2. Enter the repository URL: `https://github.com/your-org/wedge-pay-ios.git`
+2. Enter the repository URL: `https://github.com/wedge-operations/wedge-pay-ios.git`
 3. Select the version you want to use (recommended: latest stable version)
 4. Click **Add Package**
 
 ### Manual Installation
 
-1. Clone the repository: `git clone https://github.com/your-org/wedge-pay-ios.git`
+1. Clone the repository: `git clone https://github.com/wedge-operations/wedge-pay-ios.git`
 2. Drag the `Sources/wedge_pay_ios` folder into your Xcode project
 3. Ensure the files are added to your target
 
