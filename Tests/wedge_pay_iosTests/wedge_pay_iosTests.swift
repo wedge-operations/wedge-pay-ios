@@ -4,10 +4,12 @@ import XCTest
 final class WedgePayIOSTests: XCTestCase {
     
     func testWedgeEnvironmentURLs() {
-        let environments = ["integration": "https://onboarding-integration.wedge-can.com",
+        let environments = ["development": "http://localhost:3000",
+                           "integration": "https://onboarding-integration.wedge-can.com",
                            "sandbox": "https://onboarding-sandbox.wedge-can.com",
-                           "production": "https://onboarding.wedge-can.com"]
+                           "production": "https://onboarding-production.wedge-can.com"]
         
+        XCTAssertEqual(environments["development"], "http://localhost:3000")
         XCTAssertEqual(environments["integration"], "https://onboarding-integration.wedge-can.com")
         XCTAssertEqual(environments["sandbox"], "https://onboarding-sandbox.wedge-can.com")
         XCTAssertEqual(environments["production"], "https://onboarding-production.wedge-can.com")

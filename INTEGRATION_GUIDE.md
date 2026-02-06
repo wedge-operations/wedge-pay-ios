@@ -159,16 +159,86 @@ struct ContentView: View {
 }
 ```
 
+## Plaid Hosted Link (ASWebAuthenticationSession)
+
+When the Web SDK receives a `hosted_link_url` from the backend, the iOS wrapper opens it using **ASWebAuthenticationSession** (not inside the WKWebView). This avoids OAuth return URLs being handled inside the SPA and causing 404s.
+
+### Required iOS configuration
+
+1. **Callback scheme** — Use your **app’s bundle identifier** as the Plaid completion redirect (recommended). If you omit `plaidCallbackScheme`, the SDK uses `Bundle.main.bundleIdentifier` (e.g. `com.yourapp.id` → `com.yourapp.id://plaid-link-complete`). Your backend should set `completion_redirect_uri` for mobile to that (e.g. `com.yourapp.id://plaid-link-complete`). You can override by passing `plaidCallbackScheme: "custom-scheme"` if needed.
+
+2. **Register the URL scheme** in the app target (**Info → URL Types**). The scheme must match what the backend uses (your bundle ID when using the default, or your custom scheme). Example for bundle ID `com.yourapp.id`:
+
+   ```xml
+   <key>CFBundleURLTypes</key>
+   <array>
+       <dict>
+           <key>CFBundleURLSchemes</key>
+           <array>
+               <string>com.yourapp.id</string>
+           </array>
+           <key>CFBundleURLName</key>
+           <string>Plaid Hosted Link callback</string>
+           <key>CFBundleTypeRole</key>
+           <string>Editor</string>
+       </dict>
+   </array>
+   ```
+
+### Usage
+
+```swift
+WedgePayIOS(
+    token: "your-token",
+    env: "sandbox",
+    type: "onboarding",
+    // plaidCallbackScheme: omit to use the app's bundle ID (e.g. com.yourapp.id://complete)
+    onEvent: { _ in },
+    onSuccess: { _ in },
+    onClose: { _ in },
+    onLoad: { _ in },
+    onError: { _ in }
+)
+```
+
+### Bridge contract
+
+- The Web SDK posts to the **`openPlaidHostedLink`** script message handler. The handler accepts either a **URL string** (`message.body` as the raw URL) or a **payload object** `{ url: "<hosted_link_url>" }` (or `{ type: "OPEN_PLAID_HOSTED_LINK", url: "..." }`).
+- The iOS SDK opens that URL in **ASWebAuthenticationSession** (with `callbackURLScheme` and a presentation context). The session is retained until the callback runs.
+- When Plaid redirects to your app (e.g. `myapp-plaid://complete?...`) or the user cancels, the iOS SDK calls **`window.__plaidHostedLinkComplete(result)`** (no webview reload). Result:
+  - `result.status`: `"success"` or `"cancel"`
+  - `result.callbackUrl`: the redirect URL on success (optional string).
+
+The Web SDK is responsible for registering `window.__plaidHostedLinkComplete` and refreshing backend state on success or showing cancel/error UI on cancel.
+
+**How the SDK does it:** The SDK’s coordinator conforms to **WKScriptMessageHandler**, registers the **`openPlaidHostedLink`** handler when creating the WKWebView, and keeps a strong reference to the **ASWebAuthenticationSession** until the callback runs. It does **not** reload the webview after Plaid redirects; it notifies the web app via `__plaidHostedLinkComplete` so the web app can continue without a full page reload. If you implement your own view controller instead of using `WedgePayIOS`, you can either use the same callback contract or, after Plaid redirects, reload the webview with your current onboarding URL (the same base URL you load in the webview) so the web app can continue.
+
+### Rules
+
+- Do **not** open `hosted_link_url` inside the WKWebView.
+- Always use **ASWebAuthenticationSession** for the Hosted Link URL.
+- The session is retained until completion; concurrent `OPEN_PLAID_HOSTED_LINK` calls are ignored while a session is active.
+
+### Common issues
+
+| Issue | Check |
+|-------|--------|
+| Callback never fires | Scheme in Info.plist and `plaidCallbackScheme` match backend `completion_redirect_uri`; session is not released early. |
+| 404 / SPA reload | Hosted Link was opened in WKWebView; ensure only the native bridge opens it in ASWebAuthenticationSession. |
+| Multiple sessions | SDK blocks concurrent Hosted Link opens; wait for completion before opening again. |
+
+---
+
 ### API Reference
 
 #### WedgePayIOS Initializer
 
 ```swift
 public init(
-    shouldDismiss: Bool = false,
     token: String,
     env: String,
-    type: String = "onboarding", // New parameter
+    type: String = "onboarding",
+    plaidCallbackScheme: String? = nil,
     onEvent: @escaping (Any) -> Void,
     onSuccess: @escaping (String) -> Void,
     onClose: @escaping (Any) -> Void,
@@ -182,8 +252,9 @@ public init(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `token` | String | Required | Your onboarding token |
-| `env` | String | Required | Environment ("integration", "sandbox", "production") |
+| `env` | String | Required | Environment ("development", "integration", "sandbox", "production") |
 | `type` | String | "onboarding" | Flow type ("onboarding" or "funding") |
+| `plaidCallbackScheme` | String? | nil | If set, used as the Plaid callback URL scheme. If nil, the app’s **bundle identifier** is used (e.g. `com.yourapp.id://complete`). |
 | `onEvent` | Closure | Required | General event handler |
 | `onSuccess` | Closure | Required | Success completion handler |
 | `onClose` | Closure | Required | Close/cancel handler |
@@ -229,6 +300,11 @@ WedgePayIOS(
 ### Test URLs
 
 Use these test URLs to verify the type parameter functionality:
+
+#### Development Environment (local)
+- Base URL: `http://localhost:3000` (same query format as other environments)
+- Onboarding: `http://localhost:3000?onboardingToken=test&type=onboarding`
+- Funding: `http://localhost:3000?onboardingToken=test&type=funding`
 
 #### Integration Environment
 - Onboarding: `https://onboarding-integration.wedge-can.com?onboardingToken=test&type=onboarding`
@@ -331,6 +407,7 @@ For questions about implementing the type parameter functionality:
 ### Version 1.1.0
 - ✨ **NEW**: Added `type` parameter support
 - ✨ **NEW**: Support for "onboarding" and "funding" flow types
+- ✨ **NEW**: Plaid Hosted Link via ASWebAuthenticationSession (`plaidCallbackScheme`)
 - 🔄 **ENHANCED**: URL construction includes type parameter
 - ✅ **BACKWARD COMPATIBLE**: Existing code continues to work
 - 📚 **DOCUMENTATION**: Comprehensive integration guide

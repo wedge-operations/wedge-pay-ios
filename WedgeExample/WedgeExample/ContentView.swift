@@ -12,7 +12,7 @@ struct ContentView: View {
     @State private var alertMessage = ""
     @State private var showingOnboarding = false
     
-    private let environments = ["integration", "sandbox", "production"]
+    private let environments = ["development", "integration", "sandbox", "production"]
     private let types = ["onboarding", "funding"]
     
     var body: some View {
@@ -209,6 +209,7 @@ struct OnboardingView: View {
             token: token,
             env: env,
             type: type,
+            // plaidCallbackScheme: omit to use the app's bundle ID (e.g. wedge.WedgeExample://complete)
             onEvent: onEvent,
             onSuccess: onSuccess,
             onClose: onClose,

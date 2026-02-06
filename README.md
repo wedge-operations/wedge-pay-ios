@@ -8,13 +8,14 @@ A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer 
 
 - 🎯 **Native SwiftUI Integration**: Built with SwiftUI and UIViewRepresentable for modern iOS apps
 - 🔄 **Bidirectional Communication**: Real-time messaging between the webapp and native SDK
-- ⚙️ **Configurable**: Support for integration, sandbox, and production environments
+- ⚙️ **Configurable**: Support for development (localhost), integration, sandbox, and production environments
 - 🎨 **Modern UI**: Clean, native iOS design with smooth animations
 - 📱 **iOS 14+ Support**: Built for modern iOS applications
 - 🔒 **Security**: HTTPS-only navigation, input validation, and secure communication
 - ♿ **Accessibility**: Full VoiceOver support and accessibility labels
 - 🔄 **Error Handling**: Comprehensive error handling with retry mechanisms
 - 🧹 **Memory Management**: Proper cleanup and memory leak prevention
+- 🔗 **Plaid Hosted Link**: Opens Plaid Hosted Link in ASWebAuthenticationSession (not in WKWebView) when `plaidCallbackScheme` is set; avoids OAuth 404s and notifies the Web SDK on completion
 
 ## Type Parameter Functionality
 
@@ -47,6 +48,15 @@ WedgePayIOS(
     token: "your-token", 
     env: "sandbox",
     type: "funding", // Funding-focused flow
+    // ... other parameters
+)
+
+// With Plaid Hosted Link (custom URL scheme must be in Info.plist)
+WedgePayIOS(
+    token: "your-token",
+    env: "sandbox",
+    type: "onboarding",
+    plaidCallbackScheme: "myapp-plaid",
     // ... other parameters
 )
 ```
@@ -103,7 +113,7 @@ import WedgePayIOS
 ```swift
 WedgePayIOS(
     token: "your-onboarding-token",
-    env: "sandbox", // or "integration", "production"
+    env: "sandbox", // or "development", "integration", "production"
     type: "onboarding", // or "funding" for changes to linked bank accounts
     onEvent: { event in
         // Handle general events
@@ -183,7 +193,7 @@ The repository includes a complete example project (`WedgeExample/`) that demons
 - **SDK Integration**: How to import and use the `WedgePayIOS` component
 - **Callback Handling**: Examples of all SDK callbacks (onSuccess, onError, onClose, etc.)
 - **Error Handling**: Comprehensive error handling and user feedback
-- **Environment Switching**: Support for sandbox and production environments
+- **Environment Switching**: Support for development (localhost), sandbox, and production environments
 
 To run the example:
 1. Open `WedgeExample/WedgeExample.xcodeproj` in Xcode
@@ -218,7 +228,7 @@ public struct WedgePayIOS: UIViewRepresentable {
 ### Parameters
 
 - `token`: Your onboarding token
-- `env`: Environment ("integration", "sandbox", "production")
+- `env`: Environment ("development", "integration", "sandbox", "production")
 - `type`: Flow type ("onboarding" for new users, "funding" for existing user bank adjustments)
 - `onEvent`: Called for general events
 - `onSuccess`: Called when onboarding completes successfully
@@ -230,9 +240,10 @@ public struct WedgePayIOS: UIViewRepresentable {
 
 ```swift
 var environments = [
+    "development": "http://localhost:3000",
     "integration": "https://onboarding-integration.wedge-can.com",
     "sandbox": "https://onboarding-sandbox.wedge-can.com",
-    "production": "https://onboarding.wedge-can.com"
+    "production": "https://onboarding-production.wedge-can.com"
 ]
 ```
 
