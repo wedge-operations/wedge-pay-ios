@@ -186,16 +186,22 @@ public struct WedgePayIOS: UIViewRepresentable {
             coordinator.plaidHostedLinkCoordinator = PlaidHostedLinkCoordinator(webView: webView, callbackScheme: scheme)
         }
 
-        // Load initial URL
+        // Build initial URL and optional plaidCompletionRedirectUri for webapp config
+        let completionRedirectUri = effectivePlaidCallbackScheme.map { "\($0)://complete" } ?? ""
+
         guard let baseUrlString = environments[env] else {
             print("Error: Environment '\(env)' not found. Available environments: \(environments.keys.joined(separator: ", "))")
 
             let fallbackUrl = environments["sandbox"]!
             if var components = URLComponents(string: fallbackUrl) {
-                components.queryItems = [
+                var items = [
                     URLQueryItem(name: "onboardingToken", value: token),
                     URLQueryItem(name: "type", value: type)
                 ]
+                if !completionRedirectUri.isEmpty {
+                    items.append(URLQueryItem(name: "plaidCompletionRedirectUri", value: completionRedirectUri))
+                }
+                components.queryItems = items
                 if let url = components.url {
                     webView.load(URLRequest(url: url))
                 }
@@ -208,10 +214,14 @@ public struct WedgePayIOS: UIViewRepresentable {
             return webView
         }
 
-        components.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "onboardingToken", value: token),
             URLQueryItem(name: "type", value: type)
         ]
+        if !completionRedirectUri.isEmpty {
+            queryItems.append(URLQueryItem(name: "plaidCompletionRedirectUri", value: completionRedirectUri))
+        }
+        components.queryItems = queryItems
 
         guard let url = components.url else {
             print("Error: Failed to build URL with token and type")

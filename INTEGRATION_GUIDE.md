@@ -201,6 +201,15 @@ WedgePayIOS(
 )
 ```
 
+### Plaid completion redirect URI – webapp config
+
+The iOS SDK passes **`plaidCompletionRedirectUri`** to the webapp so it can use it when initializing and when creating the Plaid Hosted Link:
+
+1. **Query param on initial load** — When the SDK loads the webapp URL, it appends **`plaidCompletionRedirectUri`** to the query string when a callback scheme is configured (bundle ID or `plaidCallbackScheme`). Value is the full redirect URI (e.g. `com.yourapp.id://complete` or `wedge.WedgeExample://complete`). The webapp can read this from the URL and pass it into **setConfig / initializeSDK** as `plaidCompletionRedirectUri` in the config object.
+2. **Injected after load** — The SDK also sets **`window.__wedgePlaidCompletionRedirectUri`** and **`window.__wedgePlaidCallbackScheme`** when the page loads, and includes them in the **iOSReady** event detail. The webapp can use these if it needs the value after load (e.g. to call setConfig with `plaidCompletionRedirectUri`).
+
+If the webapp omits or sends an empty `plaidCompletionRedirectUri`, it may fall back to a legacy default (e.g. `wedge.WedgeExample://plaid-link-complete`). Use the same redirect URI you register with Plaid / your backend.
+
 ### Bridge contract
 
 - The Web SDK posts to the **`openPlaidHostedLink`** script message handler. The handler accepts either a **URL string** (`message.body` as the raw URL) or a **payload object** `{ url: "<hosted_link_url>" }` (or `{ type: "OPEN_PLAID_HOSTED_LINK", url: "..." }`).
