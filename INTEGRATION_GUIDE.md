@@ -212,21 +212,21 @@ If the webapp omits or sends an empty `plaidCompletionRedirectUri`, it may fall 
 
 ### Bridge contract
 
-- The Web SDK posts to the **`openPlaidHostedLink`** script message handler. The handler accepts either a **URL string** (`message.body` as the raw URL) or a **payload object** `{ url: "<hosted_link_url>" }` (or `{ type: "OPEN_PLAID_HOSTED_LINK", url: "..." }`).
+- The Web SDK posts to the **`openHostedLink`** script message handler. The handler accepts either a **URL string** (`message.body` as the raw URL) or a **payload object** `{ url: "<hosted_link_url>" }` (or `{ type: "OPEN_HOSTED_LINK", url: "..." }`).
 - The iOS SDK opens that URL in **ASWebAuthenticationSession** (with `callbackURLScheme` and a presentation context). The session is retained until the callback runs.
-- When Plaid redirects to your app (e.g. `myapp-plaid://complete?...`) or the user cancels, the iOS SDK calls **`window.__plaidHostedLinkComplete(result)`** (no webview reload). Result:
+- When the provider redirects to your app (e.g. `myapp-plaid://complete?...`) or the user cancels, the iOS SDK calls **`window.__hostedLinkComplete(result)`** (no webview reload). Result:
   - `result.status`: `"success"` or `"cancel"`
   - `result.callbackUrl`: the redirect URL on success (optional string).
 
-The Web SDK is responsible for registering `window.__plaidHostedLinkComplete` and refreshing backend state on success or showing cancel/error UI on cancel.
+The Web SDK is responsible for registering `window.__hostedLinkComplete` and refreshing backend state on success or showing cancel/error UI on cancel.
 
-**How the SDK does it:** The SDK’s coordinator conforms to **WKScriptMessageHandler**, registers the **`openPlaidHostedLink`** handler when creating the WKWebView, and keeps a strong reference to the **ASWebAuthenticationSession** until the callback runs. It does **not** reload the webview after Plaid redirects; it notifies the web app via `__plaidHostedLinkComplete` so the web app can continue without a full page reload. If you implement your own view controller instead of using `WedgePayIOS`, you can either use the same callback contract or, after Plaid redirects, reload the webview with your current onboarding URL (the same base URL you load in the webview) so the web app can continue.
+**How the SDK does it:** The SDK’s coordinator conforms to **WKScriptMessageHandler**, registers the **`openHostedLink`** handler when creating the WKWebView, and keeps a strong reference to the **ASWebAuthenticationSession** until the callback runs. It does **not** reload the webview after the provider redirects; it notifies the web app via `__hostedLinkComplete` so the web app can continue without a full page reload. If you implement your own view controller instead of using `WedgePayIOS`, you can either use the same callback contract or, after redirects, reload the webview with your current onboarding URL (the same base URL you load in the webview) so the web app can continue.
 
 ### Rules
 
 - Do **not** open `hosted_link_url` inside the WKWebView.
 - Always use **ASWebAuthenticationSession** for the Hosted Link URL.
-- The session is retained until completion; concurrent `OPEN_PLAID_HOSTED_LINK` calls are ignored while a session is active.
+- The session is retained until completion; concurrent `openHostedLink` calls are ignored while a session is active.
 
 ### Common issues
 

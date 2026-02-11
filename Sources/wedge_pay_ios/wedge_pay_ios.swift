@@ -15,10 +15,10 @@ var environments = [
 ]
 
 #if os(iOS) && canImport(AuthenticationServices)
-/// Coordinates opening Plaid Hosted Link in ASWebAuthenticationSession and notifying the Web SDK on completion.
+/// Coordinates opening a provider Hosted Link in ASWebAuthenticationSession and notifying the Web SDK on completion.
 /// The session is strongly retained until completion to prevent early deallocation.
 @available(iOS 12.0, *)
-final class PlaidHostedLinkCoordinator: NSObject, ASWebAuthenticationPresentationContextProviding {
+final class HostedLinkCoordinator: NSObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
     private weak var webView: WKWebView?
     private let callbackScheme: String
@@ -74,8 +74,8 @@ final class PlaidHostedLinkCoordinator: NSObject, ASWebAuthenticationPresentatio
 
         let js = """
         (function() {
-            if (window.__plaidHostedLinkComplete) {
-                window.__plaidHostedLinkComplete({
+            if (window.__hostedLinkComplete) {
+                window.__hostedLinkComplete({
                     status: "\(status)",
                     callbackUrl: "\(safeCallback)"
                 });
@@ -179,11 +179,11 @@ public struct WedgePayIOS: UIViewRepresentable {
         webView.configuration.userContentController.add(coordinator, name: "onEvent")
         webView.configuration.userContentController.add(coordinator, name: "onError")
         webView.configuration.userContentController.add(coordinator, name: "onSuccess")
-        webView.configuration.userContentController.add(coordinator, name: "openPlaidHostedLink")
+        webView.configuration.userContentController.add(coordinator, name: "openHostedLink")
 
         coordinator.webView = webView
         if let scheme = effectivePlaidCallbackScheme, #available(iOS 12.0, *) {
-            coordinator.plaidHostedLinkCoordinator = PlaidHostedLinkCoordinator(webView: webView, callbackScheme: scheme)
+            coordinator.hostedLinkCoordinator = HostedLinkCoordinator(webView: webView, callbackScheme: scheme)
         }
 
         // Build initial URL and optional plaidCompletionRedirectUri for webapp config
@@ -244,7 +244,7 @@ public struct WedgePayIOS: UIViewRepresentable {
 
         var wrapper: WedgePayIOS
         weak var webView: WKWebView?
-        var plaidHostedLinkCoordinator: PlaidHostedLinkCoordinator?
+        var hostedLinkCoordinator: HostedLinkCoordinator?
 
         init(wrapper: WedgePayIOS) {
             self.wrapper = wrapper
@@ -271,8 +271,8 @@ public struct WedgePayIOS: UIViewRepresentable {
             case "onClose":
                 wrapper.onClose("Closed")
 
-            case "openPlaidHostedLink":
-                handleOpenPlaidHostedLink(message.body)
+            case "openHostedLink":
+                handleOpenHostedLink(message.body)
 
             case "logHandler":
                 // Optional: forward logs for debugging
@@ -284,9 +284,9 @@ public struct WedgePayIOS: UIViewRepresentable {
             }
         }
 
-        private func handleOpenPlaidHostedLink(_ body: Any) {
-            guard let coordinator = plaidHostedLinkCoordinator else {
-                // print("openPlaidHostedLink received but plaidHostedLinkCoordinator is nil. Did you set plaidCallbackScheme?")
+        private func handleOpenHostedLink(_ body: Any) {
+            guard let coordinator = hostedLinkCoordinator else {
+                // print("openHostedLink received but hostedLinkCoordinator is nil. Did you set plaidCallbackScheme?")
                 return
             }
 
@@ -306,7 +306,7 @@ public struct WedgePayIOS: UIViewRepresentable {
         // MARK: - Navigation Policy
 
         /// IMPORTANT:
-        /// If the Plaid completion redirect (custom scheme) ever attempts to load in WKWebView, cancel it.
+        /// If the Hosted Link completion redirect (custom scheme) ever attempts to load in WKWebView, cancel it.
         /// The completion should be intercepted by ASWebAuthenticationSession instead.
         public func webView(_ webView: WKWebView,
                             decidePolicyFor navigationAction: WKNavigationAction,
