@@ -165,7 +165,7 @@ When the Web SDK receives a `hosted_link_url` from the backend, the iOS wrapper 
 
 ### Required iOS configuration
 
-1. **Callback scheme** — Use your **app’s bundle identifier** as the Plaid completion redirect (recommended). If you omit `plaidCallbackScheme`, the SDK uses `Bundle.main.bundleIdentifier` (e.g. `com.yourapp.id` → `com.yourapp.id://plaid-link-complete`). Your backend should set `completion_redirect_uri` for mobile to that (e.g. `com.yourapp.id://plaid-link-complete`). You can override by passing `plaidCallbackScheme: "custom-scheme"` if needed.
+1. **Callback scheme** — Use your **app’s bundle identifier** as the Plaid completion redirect (recommended). If you omit `completionRedirectUri`, the SDK uses `Bundle.main.bundleIdentifier` (e.g. `com.yourapp.id` → `com.yourapp.id://plaid-link-complete`). Your backend should set `completion_redirect_uri` for mobile to that (e.g. `com.yourapp.id://plaid-link-complete`). You can override by passing `completionRedirectUri: "custom-scheme"` if needed.
 
 2. **Register the URL scheme** in the app target (**Info → URL Types**). The scheme must match what the backend uses (your bundle ID when using the default, or your custom scheme). Example for bundle ID `com.yourapp.id`:
 
@@ -192,7 +192,7 @@ WedgePayIOS(
     token: "your-token",
     env: "sandbox",
     type: "onboarding",
-    // plaidCallbackScheme: omit to use the app's bundle ID (e.g. com.yourapp.id://complete)
+    // completionRedirectUri: omit to use the app's bundle ID (e.g. com.yourapp.id://complete)
     onEvent: { _ in },
     onSuccess: { _ in },
     onClose: { _ in },
@@ -203,12 +203,26 @@ WedgePayIOS(
 
 ### Plaid completion redirect URI – webapp config
 
-The iOS SDK passes **`plaidCompletionRedirectUri`** to the webapp so it can use it when initializing and when creating the Plaid Hosted Link:
+The iOS SDK builds an app-specific redirect URI at runtime:
+- If provided, uses `completionRedirectUri`.
+- Otherwise uses the first URL scheme registered in `CFBundleURLTypes`.
+- If unavailable, falls back to `Bundle.main.bundleIdentifier://plaid-link-complete`.
 
-1. **Query param on initial load** — When the SDK loads the webapp URL, it appends **`plaidCompletionRedirectUri`** to the query string when a callback scheme is configured (bundle ID or `plaidCallbackScheme`). Value is the full redirect URI (e.g. `com.yourapp.id://complete` or `wedge.WedgeExample://complete`). The webapp can read this from the URL and pass it into **setConfig / initializeSDK** as `plaidCompletionRedirectUri` in the config object.
-2. **Injected after load** — The SDK also sets **`window.__wedgePlaidCompletionRedirectUri`** and **`window.__wedgePlaidCallbackScheme`** when the page loads, and includes them in the **iOSReady** event detail. The webapp can use these if it needs the value after load (e.g. to call setConfig with `plaidCompletionRedirectUri`).
+The SDK then provides the redirect URI to the web app through supported channels:
 
-If the webapp omits or sends an empty `plaidCompletionRedirectUri`, it may fall back to a legacy default (e.g. `wedge.WedgeExample://plaid-link-complete`). Use the same redirect URI you register with Plaid / your backend.
+1. **Preferred (`setConfig`)** — Calls:
+   `WedgeSDK.setConfig({ completionRedirectUri: "<uri>" })`
+2. **Injected bridge object** — Sets both `window.WedgeSDKiOS` and `window.WedgeSDKIOS` with:
+   - `getCompletionRedirectUri(): string`
+   - `completionRedirectUri: string`
+   - `plaidCompletionRedirectUri: string`
+3. **URL query params** — Appends all accepted keys:
+   - `completionRedirectUri`
+   - `plaidCompletionRedirectUri`
+   - `completion_redirect_uri`
+   - `plaid_completion_redirect_uri`
+
+Query values are URL-encoded by `URLComponents`.
 
 ### Bridge contract
 
@@ -216,7 +230,8 @@ If the webapp omits or sends an empty `plaidCompletionRedirectUri`, it may fall 
 - The iOS SDK opens that URL in **ASWebAuthenticationSession** (with `callbackURLScheme` and a presentation context). The session is retained until the callback runs.
 - When the provider redirects to your app (e.g. `myapp-plaid://complete?...`) or the user cancels, the iOS SDK calls **`window.__hostedLinkComplete(result)`** (no webview reload). Result:
   - `result.status`: `"success"` or `"cancel"`
-  - `result.callbackUrl`: the redirect URL on success (optional string).
+  - `result.callbackUrl`: the redirect URL on success (optional string)
+  - The SDK can also support sending a callback URL string containing a `status`/`result` query parameter if your web app consumes the string form.
 
 The Web SDK is responsible for registering `window.__hostedLinkComplete` and refreshing backend state on success or showing cancel/error UI on cancel.
 
@@ -232,7 +247,7 @@ The Web SDK is responsible for registering `window.__hostedLinkComplete` and ref
 
 | Issue | Check |
 |-------|--------|
-| Callback never fires | Scheme in Info.plist and `plaidCallbackScheme` match backend `completion_redirect_uri`; session is not released early. |
+| Callback never fires | Scheme in Info.plist and `completionRedirectUri` match backend `completion_redirect_uri`; session is not released early. |
 | 404 / SPA reload | Hosted Link was opened in WKWebView; ensure only the native bridge opens it in ASWebAuthenticationSession. |
 | Multiple sessions | SDK blocks concurrent Hosted Link opens; wait for completion before opening again. |
 
@@ -247,7 +262,7 @@ public init(
     token: String,
     env: String,
     type: String = "onboarding",
-    plaidCallbackScheme: String? = nil,
+    completionRedirectUri: String? = nil,
     onEvent: @escaping (Any) -> Void,
     onSuccess: @escaping (String) -> Void,
     onClose: @escaping (Any) -> Void,
@@ -263,7 +278,7 @@ public init(
 | `token` | String | Required | Your onboarding token |
 | `env` | String | Required | Environment ("development", "integration", "sandbox", "production") |
 | `type` | String | "onboarding" | Flow type ("onboarding" or "funding") |
-| `plaidCallbackScheme` | String? | nil | If set, used as the Plaid callback URL scheme. If nil, the app’s **bundle identifier** is used (e.g. `com.yourapp.id://complete`). |
+| `completionRedirectUri` | String? | nil | If set, used as the full redirect URI. If nil, SDK derives it from app URL scheme (`CFBundleURLTypes`) and falls back to bundle identifier, then appends `://plaid-link-complete`. |
 | `onEvent` | Closure | Required | General event handler |
 | `onSuccess` | Closure | Required | Success completion handler |
 | `onClose` | Closure | Required | Close/cancel handler |
@@ -397,7 +412,7 @@ func determineUserTypeFromContext(context: OnboardingContext) -> String {
 
 ## Version Information
 
-- **SDK Version**: 1.1.0
+- **SDK Version**: 1.2.0
 - **Minimum iOS Version**: 14.0+
 - **Swift Version**: 5.9+
 - **Xcode Version**: 15.0+
@@ -413,10 +428,16 @@ For questions about implementing the type parameter functionality:
 
 ## Changelog
 
+### Version 1.2.0
+- ✨ **NEW**: Runtime app-specific completion redirect URI resolution (explicit URI, URL scheme, or bundle ID fallback)
+- ✨ **NEW**: Webapp redirect propagation through `WedgeSDK.setConfig`, `window.WedgeSDKiOS/window.WedgeSDKIOS`, and supported URL query params
+- ✨ **NEW**: Hosted Link completion callback contract maintained via `window.__hostedLinkComplete(...)`
+- 📚 **DOCUMENTATION**: Updated integration guidance for redirect/channel requirements
+
 ### Version 1.1.0
 - ✨ **NEW**: Added `type` parameter support
 - ✨ **NEW**: Support for "onboarding" and "funding" flow types
-- ✨ **NEW**: Plaid Hosted Link via ASWebAuthenticationSession (`plaidCallbackScheme`)
+- ✨ **NEW**: Plaid Hosted Link via ASWebAuthenticationSession (`completionRedirectUri`)
 - 🔄 **ENHANCED**: URL construction includes type parameter
 - ✅ **BACKWARD COMPATIBLE**: Existing code continues to work
 - 📚 **DOCUMENTATION**: Comprehensive integration guide

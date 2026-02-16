@@ -203,13 +203,18 @@ struct OnboardingView: View {
     let onClose: (Any) -> ()
     let onLoad: (Any) -> ()
     let onError: (Any) -> ()
+
+    private var completionRedirectUri: String {
+        let configuredScheme = Bundle.main.firstConfiguredURLScheme ?? "wedge.WedgeExample"
+        return "\(configuredScheme)://plaid-link-complete"
+    }
     
     var body: some View {
         WedgePayIOS(
             token: token,
             env: env,
             type: type,
-            // plaidCallbackScheme: omit to use the app's bundle ID (e.g. wedge.WedgeExample://complete)
+            completionRedirectUri: completionRedirectUri,
             onEvent: onEvent,
             onSuccess: onSuccess,
             onClose: onClose,
@@ -224,5 +229,22 @@ struct OnboardingView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+    }
+}
+
+private extension Bundle {
+    var firstConfiguredURLScheme: String? {
+        guard let urlTypes = object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] else {
+            return nil
+        }
+
+        for urlType in urlTypes {
+            if let schemes = urlType["CFBundleURLSchemes"] as? [String],
+               let firstScheme = schemes.first,
+               !firstScheme.isEmpty {
+                return firstScheme
+            }
+        }
+        return nil
     }
 }

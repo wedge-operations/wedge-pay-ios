@@ -1,13 +1,13 @@
 import SwiftUI
 import WebKit
+import UIKit
 #if canImport(AuthenticationServices)
 import AuthenticationServices
 #endif
 
-// SDK Version
-public let WEDGE_PAY_IOS_VERSION = "1.1.0"
+public let WEDGE_PAY_IOS_VERSION = "1.2.0"
 
-var environments = [
+private let environments: [String: String] = [
     "development": "http://localhost:3000",
     "integration": "https://onboarding-integration.wedge-can.com",
     "sandbox": "https://onboarding-sandbox.wedge-can.com",
@@ -15,8 +15,6 @@ var environments = [
 ]
 
 #if os(iOS) && canImport(AuthenticationServices)
-/// Coordinates opening a provider Hosted Link in ASWebAuthenticationSession and notifying the Web SDK on completion.
-/// The session is strongly retained until completion to prevent early deallocation.
 @available(iOS 12.0, *)
 final class HostedLinkCoordinator: NSObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
@@ -28,60 +26,62 @@ final class HostedLinkCoordinator: NSObject, ASWebAuthenticationPresentationCont
         self.callbackScheme = callbackScheme
     }
 
-    /// Opens the Hosted Link URL in ASWebAuthenticationSession. Ignores concurrent calls while a session is active.
     func open(hostedLinkURL: URL) {
         guard session == nil else { return }
 
-        let s = ASWebAuthenticationSession(
+        let authSession = ASWebAuthenticationSession(
             url: hostedLinkURL,
             callbackURLScheme: callbackScheme
-        ) { [weak self] callbackURL, error in
-            guard let self = self else { return }
+        ) { [weak self] callbackURL, _ in
+            guard let self else { return }
 
-            // Helpful debugging during integration
-            // print("ASWebAuthenticationSession finished callbackURL:", callbackURL?.absoluteString ?? "nil",
-            //       "error:", error?.localizedDescription ?? "nil")
-
-            if let callbackURL = callbackURL {
-                self.notifyWeb(status: "success", callbackURL: callbackURL)
+            if let callbackURL {
+                self.notifyWeb(status: "success", callbackURL: callbackURL.absoluteString)
             } else {
                 self.notifyWeb(status: "cancel", callbackURL: nil)
             }
+
             self.session = nil
         }
 
-        s.presentationContextProvider = self
-        s.prefersEphemeralWebBrowserSession = false
+        authSession.presentationContextProvider = self
+        authSession.prefersEphemeralWebBrowserSession = false
 
-        session = s
-        s.start()
+        session = authSession
+        authSession.start()
     }
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
-            .first { $0.isKeyWindow } ?? ASPresentationAnchor()
+            .first(where: { $0.isKeyWindow }) ?? ASPresentationAnchor()
     }
 
-    private func notifyWeb(status: String, callbackURL: URL?) {
-        guard let webView = webView else { return }
+    private func notifyWeb(status: String, callbackURL: String?) {
+        guard let webView else { return }
 
-        let callback = callbackURL?.absoluteString ?? ""
-        let safeCallback = callback
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-
-        let js = """
-        (function() {
-            if (window.__hostedLinkComplete) {
-                window.__hostedLinkComplete({
-                    status: "\(status)",
-                    callbackUrl: "\(safeCallback)"
-                });
-            }
-        })();
-        """
+        let js: String
+        if let callbackURL {
+            let escaped = callbackURL
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            js = """
+            (function() {
+              if (window.__hostedLinkComplete) {
+                window.__hostedLinkComplete({ status: "\(status)", callbackUrl: "\(escaped)" });
+              }
+            })();
+            """
+        } else {
+            js = """
+            (function() {
+              if (window.__hostedLinkComplete) {
+                window.__hostedLinkComplete({ status: "\(status)" });
+              }
+            })();
+            """
+        }
 
         DispatchQueue.main.async {
             webView.evaluateJavaScript(js, completionHandler: nil)
@@ -93,29 +93,22 @@ final class HostedLinkCoordinator: NSObject, ASWebAuthenticationPresentationCont
 #if os(iOS)
 @available(iOS 14.0, *)
 public struct WedgePayIOS: UIViewRepresentable {
-    var token: String
-    var env: String
-    var type: String
-    /// Callback URL scheme for Plaid Hosted Link (e.g. completion_redirect_uri "myapp://complete").
-    /// If nil, the app's **bundle identifier** is used (e.g. "com.yourapp.id" → "com.yourapp.id://complete").
-    var plaidCallbackScheme: String?
+    public var token: String
+    public var env: String
+    public var type: String
+    public var completionRedirectUri: String?
 
-    /// Scheme used for Plaid: plaidCallbackScheme if set, otherwise the app's bundle identifier.
-    var effectivePlaidCallbackScheme: String? {
-        if let s = plaidCallbackScheme, !s.isEmpty { return s }
-        return Bundle.main.bundleIdentifier
-    }
-    var onEvent: (Any) -> ()
-    var onSuccess: (String) -> ()
-    var onClose: (Any) -> ()
-    var onLoad: (Any) -> ()
-    var onError: (Any) -> ()
+    public var onEvent: (Any) -> Void
+    public var onSuccess: (String) -> Void
+    public var onClose: (Any) -> Void
+    public var onLoad: (Any) -> Void
+    public var onError: (Any) -> Void
 
     public init(
         token: String,
         env: String,
         type: String = "onboarding",
-        plaidCallbackScheme: String? = nil,
+        completionRedirectUri: String? = nil,
         onEvent: @escaping (Any) -> Void,
         onSuccess: @escaping (String) -> Void,
         onClose: @escaping (Any) -> Void,
@@ -125,26 +118,41 @@ public struct WedgePayIOS: UIViewRepresentable {
         self.token = token
         self.env = env
         self.type = type
-        self.plaidCallbackScheme = plaidCallbackScheme
+        self.completionRedirectUri = completionRedirectUri
         self.onEvent = onEvent
         self.onSuccess = onSuccess
         self.onClose = onClose
         self.onLoad = onLoad
         self.onError = onError
+
+        precondition(URL(string: resolvedCompletionRedirectUri)?.scheme != nil,
+                     "completionRedirectUri must include a valid URL scheme.")
+    }
+
+    private var resolvedCompletionRedirectUri: String {
+        let explicit = completionRedirectUri?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let explicit, !explicit.isEmpty { return explicit }
+
+        if let configuredScheme = Bundle.main.firstConfiguredURLScheme, !configuredScheme.isEmpty {
+            return "\(configuredScheme)://plaid-link-complete"
+        }
+
+        if let bundleIdentifier = Bundle.main.bundleIdentifier, !bundleIdentifier.isEmpty {
+            return "\(bundleIdentifier)://plaid-link-complete"
+        }
+
+        return "wedge.WedgeExample://plaid-link-complete"
+    }
+
+    private var completionCallbackScheme: String? {
+        URL(string: resolvedCompletionRedirectUri)?.scheme
     }
 
     public func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-
-        // Configure WebView preferences for iOS 14+
-        if #available(iOS 14.0, *) {
-            let prefs = WKWebpagePreferences()
-            prefs.allowsContentJavaScript = true
-            config.defaultWebpagePreferences = prefs
-        } else {
-            config.preferences.javaScriptEnabled = true
-        }
-
+        let prefs = WKWebpagePreferences()
+        prefs.allowsContentJavaScript = true
+        config.defaultWebpagePreferences = prefs
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
 
@@ -153,95 +161,89 @@ public struct WedgePayIOS: UIViewRepresentable {
         webView.uiDelegate = context.coordinator
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.allowsBackForwardNavigationGestures = true
-        webView.scrollView.contentInsetAdjustmentBehavior = .automatic
-        webView.scrollView.showsVerticalScrollIndicator = true
-        webView.scrollView.showsHorizontalScrollIndicator = true
-        webView.scrollView.bounces = true
-        webView.scrollView.maximumZoomScale = 3.0
-        webView.scrollView.minimumZoomScale = 0.5
-        webView.isUserInteractionEnabled = true
 
-        // Capture console.log output and send to iOS (optional)
-        let source = """
-        (function() {
-            function captureLog(msg) { window.webkit.messageHandlers.logHandler.postMessage(msg); }
-            window.console.log = captureLog;
-        })();
-        """
-        let script = WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
-        webView.configuration.userContentController.addUserScript(script)
+        registerBridgeScripts(on: webView)
+        registerMessageHandlers(on: webView, coordinator: context.coordinator)
 
-        // Register bridge handlers
-        webView.configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
-        let coordinator = context.coordinator
-        webView.configuration.userContentController.add(coordinator, name: "onClose")
-        webView.configuration.userContentController.add(coordinator, name: "logHandler")
-        webView.configuration.userContentController.add(coordinator, name: "onEvent")
-        webView.configuration.userContentController.add(coordinator, name: "onError")
-        webView.configuration.userContentController.add(coordinator, name: "onSuccess")
-        webView.configuration.userContentController.add(coordinator, name: "openHostedLink")
-
-        coordinator.webView = webView
-        if let scheme = effectivePlaidCallbackScheme, #available(iOS 12.0, *) {
-            coordinator.hostedLinkCoordinator = HostedLinkCoordinator(webView: webView, callbackScheme: scheme)
+        context.coordinator.webView = webView
+        if let scheme = completionCallbackScheme, #available(iOS 12.0, *) {
+            context.coordinator.hostedLinkCoordinator = HostedLinkCoordinator(
+                webView: webView,
+                callbackScheme: scheme
+            )
         }
 
-        // Build initial URL and optional plaidCompletionRedirectUri for webapp config
-        let completionRedirectUri = effectivePlaidCallbackScheme.map { "\($0)://complete" } ?? ""
-
-        guard let baseUrlString = environments[env] else {
-            print("Error: Environment '\(env)' not found. Available environments: \(environments.keys.joined(separator: ", "))")
-
-            let fallbackUrl = environments["sandbox"]!
-            if var components = URLComponents(string: fallbackUrl) {
-                var items = [
-                    URLQueryItem(name: "onboardingToken", value: token),
-                    URLQueryItem(name: "type", value: type)
-                ]
-                if !completionRedirectUri.isEmpty {
-                    items.append(URLQueryItem(name: "plaidCompletionRedirectUri", value: completionRedirectUri))
-                }
-                components.queryItems = items
-                if let url = components.url {
-                    webView.load(URLRequest(url: url))
-                }
+        guard let baseURL = environments[env], var components = URLComponents(string: baseURL) else {
+            let fallback = environments["sandbox"]!
+            var fallbackComponents = URLComponents(string: fallback)!
+            fallbackComponents.queryItems = queryItems()
+            if let url = fallbackComponents.url {
+                webView.load(URLRequest(url: url))
             }
             return webView
         }
 
-        guard var components = URLComponents(string: baseUrlString) else {
-            print("Error: Invalid base URL for environment '\(env)'")
-            return webView
+        components.queryItems = queryItems()
+        if let url = components.url {
+            webView.load(URLRequest(url: url))
         }
 
-        var queryItems = [
-            URLQueryItem(name: "onboardingToken", value: token),
-            URLQueryItem(name: "type", value: type)
-        ]
-        if !completionRedirectUri.isEmpty {
-            queryItems.append(URLQueryItem(name: "plaidCompletionRedirectUri", value: completionRedirectUri))
-        }
-        components.queryItems = queryItems
-
-        guard let url = components.url else {
-            print("Error: Failed to build URL with token and type")
-            return webView
-        }
-
-        webView.load(URLRequest(url: url))
         return webView
     }
 
-    public func updateUIView(_ uiView: WKWebView, context: Context) {
-        // No updates needed
-    }
+    public func updateUIView(_ uiView: WKWebView, context: Context) {}
 
     public func makeCoordinator() -> Coordinator {
         Coordinator(wrapper: self)
     }
 
-    public class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler, WKUIDelegate {
+    private func queryItems() -> [URLQueryItem] {
+        [
+            URLQueryItem(name: "onboardingToken", value: token),
+            URLQueryItem(name: "type", value: type),
+            URLQueryItem(name: "completionRedirectUri", value: resolvedCompletionRedirectUri)
+        ]
+    }
 
+    private func registerBridgeScripts(on webView: WKWebView) {
+        let safeRedirect = resolvedCompletionRedirectUri
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+
+        let script = """
+        (function() {
+          var redirectUri = "\(safeRedirect)";
+          var bridge = {
+            getCompletionRedirectUri: function() { return redirectUri; },
+            completionRedirectUri: redirectUri
+          };
+
+          window.WedgeSDKiOS = bridge;
+          window.WedgeSDKIOS = bridge;
+
+          window.dispatchEvent(new CustomEvent('iOSReady', {
+            detail: { completionRedirectUri: redirectUri }
+          }));
+        })();
+        """
+
+        webView.configuration.userContentController.addUserScript(
+            WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        )
+    }
+
+    private func registerMessageHandlers(on webView: WKWebView, coordinator: Coordinator) {
+        let ucc = webView.configuration.userContentController
+        webView.configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
+
+        ucc.add(coordinator, name: "onClose")
+        ucc.add(coordinator, name: "onEvent")
+        ucc.add(coordinator, name: "onError")
+        ucc.add(coordinator, name: "onSuccess")
+        ucc.add(coordinator, name: "openHostedLink")
+    }
+
+    public final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler, WKUIDelegate {
         var wrapper: WedgePayIOS
         weak var webView: WKWebView?
         var hostedLinkCoordinator: HostedLinkCoordinator?
@@ -249,8 +251,6 @@ public struct WedgePayIOS: UIViewRepresentable {
         init(wrapper: WedgePayIOS) {
             self.wrapper = wrapper
         }
-
-        // MARK: - JS Bridge
 
         public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             switch message.name {
@@ -274,21 +274,13 @@ public struct WedgePayIOS: UIViewRepresentable {
             case "openHostedLink":
                 handleOpenHostedLink(message.body)
 
-            case "logHandler":
-                // Optional: forward logs for debugging
-                // print("WEB:", message.body)
-                break
-
             default:
                 break
             }
         }
 
         private func handleOpenHostedLink(_ body: Any) {
-            guard let coordinator = hostedLinkCoordinator else {
-                // print("openHostedLink received but hostedLinkCoordinator is nil. Did you set plaidCallbackScheme?")
-                return
-            }
+            guard let hostedLinkCoordinator else { return }
 
             let urlString: String?
             if let dict = body as? [String: Any] {
@@ -299,21 +291,15 @@ public struct WedgePayIOS: UIViewRepresentable {
                 urlString = nil
             }
 
-            guard let urlString = urlString, !urlString.isEmpty, let url = URL(string: urlString) else { return }
-            coordinator.open(hostedLinkURL: url)
+            guard let raw = urlString, let url = URL(string: raw), !raw.isEmpty else { return }
+            hostedLinkCoordinator.open(hostedLinkURL: url)
         }
 
-        // MARK: - Navigation Policy
-
-        /// IMPORTANT:
-        /// If the Hosted Link completion redirect (custom scheme) ever attempts to load in WKWebView, cancel it.
-        /// The completion should be intercepted by ASWebAuthenticationSession instead.
         public func webView(_ webView: WKWebView,
                             decidePolicyFor navigationAction: WKNavigationAction,
                             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-
             if let url = navigationAction.request.url,
-               let scheme = wrapper.effectivePlaidCallbackScheme,
+               let scheme = wrapper.completionCallbackScheme,
                url.scheme?.lowercased() == scheme.lowercased() {
                 decisionHandler(.cancel)
                 return
@@ -323,67 +309,56 @@ public struct WedgePayIOS: UIViewRepresentable {
         }
 
         public func webView(_ webView: WKWebView,
-                            decidePolicyFor navigationResponse: WKNavigationResponse,
-                            decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-            decisionHandler(.allow)
-        }
-
-        public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            guard let url = webView.url else { return }
-
-            wrapper.onLoad("\(url)")
-
-            let triggerEventScript = """
-            (function() {
-                var event = new CustomEvent('iOSReady', { detail: 'iOS Ready' });
-                window.dispatchEvent(event);
-            })();
-            """
-            webView.evaluateJavaScript(triggerEventScript) { (_, error) in
-                if let error = error {
-                    print("Error triggering event: \(error)")
-                }
-            }
-        }
-
-        public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            print("WebView navigation failed: \(error.localizedDescription)")
-            wrapper.onError("Navigation failed: \(error.localizedDescription)")
-            wrapper.onClose("navigation_error")
-        }
-
-        public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            print("WebView provisional navigation failed: \(error.localizedDescription)")
-            wrapper.onError("Provisional navigation failed: \(error.localizedDescription)")
-            wrapper.onClose("provisional_navigation_error")
-        }
-
-        // MARK: - target=_blank / window.open handling
-
-        /// IMPORTANT CHANGE:
-        /// Do NOT punt target=_blank links to Safari. Keep them in the same WKWebView.
-        /// This avoids breaking Hosted Link/OAuth flows and avoids Safari "invalid address" screens.
-        public func webView(_ webView: WKWebView,
                             createWebViewWith configuration: WKWebViewConfiguration,
                             for navigationAction: WKNavigationAction,
                             windowFeatures: WKWindowFeatures) -> WKWebView? {
-
             guard navigationAction.targetFrame == nil,
                   let url = navigationAction.request.url else {
                 return nil
             }
 
-            // Allow certain schemes to open externally
             let scheme = (url.scheme ?? "").lowercased()
             if scheme == "tel" || scheme == "mailto" {
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)
                 return nil
             }
 
-            // Otherwise, load inside the same WKWebView
             webView.load(URLRequest(url: url))
             return nil
+        }
+
+        public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            guard let url = webView.url else { return }
+            wrapper.onLoad(url.absoluteString)
+        }
+
+        public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            wrapper.onError("Navigation failed: \(error.localizedDescription)")
+            wrapper.onClose("navigation_error")
+        }
+
+        public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            wrapper.onError("Provisional navigation failed: \(error.localizedDescription)")
+            wrapper.onClose("provisional_navigation_error")
         }
     }
 }
 #endif
+
+private extension Bundle {
+    var firstConfiguredURLScheme: String? {
+        guard let urlTypes = object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] else {
+            return nil
+        }
+
+        for urlType in urlTypes {
+            if let schemes = urlType["CFBundleURLSchemes"] as? [String],
+               let first = schemes.first,
+               !first.isEmpty {
+                return first
+            }
+        }
+
+        return nil
+    }
+}

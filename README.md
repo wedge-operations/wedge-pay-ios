@@ -2,7 +2,7 @@
 
 A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer component with bidirectional communication capabilities.
 
-**Version**: 1.1.0
+**Version**: 1.2.0
 
 ## Features
 
@@ -15,7 +15,7 @@ A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer 
 - ♿ **Accessibility**: Full VoiceOver support and accessibility labels
 - 🔄 **Error Handling**: Comprehensive error handling with retry mechanisms
 - 🧹 **Memory Management**: Proper cleanup and memory leak prevention
-- 🔗 **Plaid Hosted Link**: Opens Plaid Hosted Link in ASWebAuthenticationSession (not in WKWebView) when `plaidCallbackScheme` is set; avoids OAuth 404s and notifies the Web SDK on completion
+- 🔗 **Plaid Hosted Link**: Opens Hosted Link in ASWebAuthenticationSession (not WKWebView), derives app-specific redirect URI at runtime, and notifies webapp via `window.__hostedLinkComplete(...)`
 
 ## Type Parameter Functionality
 
@@ -56,7 +56,7 @@ WedgePayIOS(
     token: "your-token",
     env: "sandbox",
     type: "onboarding",
-    plaidCallbackScheme: "myapp-plaid",
+    completionRedirectUri: "myapp://plaid-link-complete",
     // ... other parameters
 )
 ```
@@ -89,7 +89,7 @@ Add the following dependency to your `Package.swift` file:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/wedge-operations/wedge-pay-ios.git", exact: "1.1.0")
+    .package(url: "https://github.com/wedge-operations/wedge-pay-ios.git", exact: "1.2.0")
 ]
 ```
 
