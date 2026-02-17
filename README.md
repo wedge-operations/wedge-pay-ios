@@ -56,10 +56,25 @@ WedgePayIOS(
     token: "your-token",
     env: "sandbox",
     type: "onboarding",
-    completionRedirectUri: "myapp://plaid-link-complete",
+    hostedLinkRedirectUri: "myapp://plaid-complete",
     // ... other parameters
 )
 ```
+
+### Hosted Link Native Contract
+
+When initializing web SDK config, the native wrapper sends:
+
+- `platform: "ios"`
+- `supportsHostedLink: true`
+- `hostedLinkRedirectUri: "<your-callback-uri>"`
+
+The iOS bridge also exposes:
+
+- `getHostedLinkRedirectUri()`
+- `hostedLinkRedirectUri`
+
+`completion_redirect_uri` remains unchanged in backend API payloads.
 
 ### Backward Compatibility
 

@@ -28,7 +28,7 @@ final class WedgePayIOSTests: XCTestCase {
             token: "test-token-123",
             env: "sandbox",
             type: "onboarding",
-            completionRedirectUri: "wedge.WedgeExample://plaid-link-complete",
+            hostedLinkRedirectUri: "wedge.WedgeExample://plaid-complete",
             onEvent: { event in
                 eventCalled = true
                 XCTAssertNotNil(event)

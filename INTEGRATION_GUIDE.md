@@ -165,7 +165,7 @@ When the Web SDK receives a `hosted_link_url` from the backend, the iOS wrapper 
 
 ### Required iOS configuration
 
-1. **Callback scheme** — Use your **app’s bundle identifier** as the Plaid completion redirect (recommended). If you omit `completionRedirectUri`, the SDK uses `Bundle.main.bundleIdentifier` (e.g. `com.yourapp.id` → `com.yourapp.id://plaid-link-complete`). Your backend should set `completion_redirect_uri` for mobile to that (e.g. `com.yourapp.id://plaid-link-complete`). You can override by passing `completionRedirectUri: "custom-scheme"` if needed.
+1. **Callback scheme** — Use your **app’s bundle identifier** as the Plaid completion redirect (recommended). If you omit `hostedLinkRedirectUri`, the SDK uses `Bundle.main.bundleIdentifier` (e.g. `com.yourapp.id` → `com.yourapp.id://plaid-complete`). Your backend should send that same value in the API payload field `completion_redirect_uri` (e.g. `com.yourapp.id://plaid-complete`). You can override by passing `hostedLinkRedirectUri: "custom-scheme"` if needed.
 
 2. **Register the URL scheme** in the app target (**Info → URL Types**). The scheme must match what the backend uses (your bundle ID when using the default, or your custom scheme). Example for bundle ID `com.yourapp.id`:
 
@@ -192,7 +192,7 @@ WedgePayIOS(
     token: "your-token",
     env: "sandbox",
     type: "onboarding",
-    // completionRedirectUri: omit to use the app's bundle ID (e.g. com.yourapp.id://complete)
+    // hostedLinkRedirectUri: omit to use the app's bundle ID (e.g. com.yourapp.id://complete)
     onEvent: { _ in },
     onSuccess: { _ in },
     onClose: { _ in },
@@ -204,25 +204,27 @@ WedgePayIOS(
 ### Plaid completion redirect URI – webapp config
 
 The iOS SDK builds an app-specific redirect URI at runtime:
-- If provided, uses `completionRedirectUri`.
+- If provided, uses `hostedLinkRedirectUri`.
 - Otherwise uses the first URL scheme registered in `CFBundleURLTypes`.
-- If unavailable, falls back to `Bundle.main.bundleIdentifier://plaid-link-complete`.
+- If unavailable, falls back to `Bundle.main.bundleIdentifier://plaid-complete`.
 
-The SDK then provides the redirect URI to the web app through supported channels:
+The SDK then provides the redirect URI and Hosted Link capabilities to the web app through supported channels:
 
 1. **Preferred (`setConfig`)** — Calls:
-   `WedgeSDK.setConfig({ completionRedirectUri: "<uri>" })`
+   `WedgeSDK.setConfig({ hostedLinkRedirectUri: "<uri>", platform: "ios", supportsHostedLink: true })`
 2. **Injected bridge object** — Sets `window.WedgeSDKIOS` with:
-   - `getCompletionRedirectUri(): string`
-   - `completionRedirectUri: string`
-   - `plaidCompletionRedirectUri: string`
+   - `getHostedLinkRedirectUri(): string`
+   - `hostedLinkRedirectUri: string`
+   - `platform: "ios"`
+   - `supportsHostedLink: true`
 3. **URL query params** — Appends all accepted keys:
-   - `completionRedirectUri`
-   - `plaidCompletionRedirectUri`
-   - `completion_redirect_uri`
-   - `plaid_completion_redirect_uri`
+   - `hostedLinkRedirectUri`
+   - `platform=ios`
+   - `supportsHostedLink=true`
 
 Query values are URL-encoded by `URLComponents`.
+
+Current Web SDK builds still accept legacy names for backward compatibility (`completionRedirectUri`, `getCompletionRedirectUri()`). New native integrations should use the hosted-link names above.
 
 ### Bridge contract
 
@@ -247,7 +249,7 @@ The Web SDK is responsible for registering `window.__hostedLinkComplete` and ref
 
 | Issue | Check |
 |-------|--------|
-| Callback never fires | Scheme in Info.plist and `completionRedirectUri` match backend `completion_redirect_uri`; session is not released early. |
+| Callback never fires | Scheme in Info.plist and `hostedLinkRedirectUri` match backend `completion_redirect_uri`; session is not released early. |
 | 404 / SPA reload | Hosted Link was opened in WKWebView; ensure only the native bridge opens it in ASWebAuthenticationSession. |
 | Multiple sessions | SDK blocks concurrent Hosted Link opens; wait for completion before opening again. |
 
@@ -262,7 +264,7 @@ public init(
     token: String,
     env: String,
     type: String = "onboarding",
-    completionRedirectUri: String? = nil,
+    hostedLinkRedirectUri: String? = nil,
     onEvent: @escaping (Any) -> Void,
     onSuccess: @escaping (String) -> Void,
     onClose: @escaping (Any) -> Void,
@@ -278,7 +280,7 @@ public init(
 | `token` | String | Required | Your onboarding token |
 | `env` | String | Required | Environment ("development", "integration", "sandbox", "production") |
 | `type` | String | "onboarding" | Flow type ("onboarding" or "funding") |
-| `completionRedirectUri` | String? | nil | If set, used as the full redirect URI. If nil, SDK derives it from app URL scheme (`CFBundleURLTypes`) and falls back to bundle identifier, then appends `://plaid-link-complete`. |
+| `hostedLinkRedirectUri` | String? | nil | If set, used as the full redirect URI. If nil, SDK derives it from app URL scheme (`CFBundleURLTypes`) and falls back to bundle identifier, then appends `://plaid-complete`. |
 | `onEvent` | Closure | Required | General event handler |
 | `onSuccess` | Closure | Required | Success completion handler |
 | `onClose` | Closure | Required | Close/cancel handler |
@@ -437,7 +439,7 @@ For questions about implementing the type parameter functionality:
 ### Version 1.1.0
 - ✨ **NEW**: Added `type` parameter support
 - ✨ **NEW**: Support for "onboarding" and "funding" flow types
-- ✨ **NEW**: Plaid Hosted Link via ASWebAuthenticationSession (`completionRedirectUri`)
+- ✨ **NEW**: Plaid Hosted Link via ASWebAuthenticationSession (`hostedLinkRedirectUri`)
 - 🔄 **ENHANCED**: URL construction includes type parameter
 - ✅ **BACKWARD COMPATIBLE**: Existing code continues to work
 - 📚 **DOCUMENTATION**: Comprehensive integration guide

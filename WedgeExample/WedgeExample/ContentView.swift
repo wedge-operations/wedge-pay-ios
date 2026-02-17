@@ -204,9 +204,9 @@ struct OnboardingView: View {
     let onLoad: (Any) -> ()
     let onError: (Any) -> ()
 
-    private var completionRedirectUri: String {
+    private var hostedLinkRedirectUri: String {
         let configuredScheme = Bundle.main.firstConfiguredURLScheme ?? "wedge.WedgeExample"
-        return "\(configuredScheme)://plaid-link-complete"
+        return "\(configuredScheme)://plaid-complete"
     }
     
     var body: some View {
@@ -214,7 +214,7 @@ struct OnboardingView: View {
             token: token,
             env: env,
             type: type,
-            completionRedirectUri: completionRedirectUri,
+            hostedLinkRedirectUri: hostedLinkRedirectUri,
             onEvent: onEvent,
             onSuccess: onSuccess,
             onClose: onClose,

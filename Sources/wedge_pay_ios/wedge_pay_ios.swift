@@ -96,7 +96,7 @@ public struct WedgePayIOS: UIViewRepresentable {
     public var token: String
     public var env: String
     public var type: String
-    public var completionRedirectUri: String?
+    public var hostedLinkRedirectUri: String?
 
     public var onEvent: (Any) -> Void
     public var onSuccess: (String) -> Void
@@ -108,7 +108,7 @@ public struct WedgePayIOS: UIViewRepresentable {
         token: String,
         env: String,
         type: String = "onboarding",
-        completionRedirectUri: String? = nil,
+        hostedLinkRedirectUri: String? = nil,
         onEvent: @escaping (Any) -> Void,
         onSuccess: @escaping (String) -> Void,
         onClose: @escaping (Any) -> Void,
@@ -118,34 +118,34 @@ public struct WedgePayIOS: UIViewRepresentable {
         self.token = token
         self.env = env
         self.type = type
-        self.completionRedirectUri = completionRedirectUri
+        self.hostedLinkRedirectUri = hostedLinkRedirectUri
         self.onEvent = onEvent
         self.onSuccess = onSuccess
         self.onClose = onClose
         self.onLoad = onLoad
         self.onError = onError
 
-        precondition(URL(string: resolvedCompletionRedirectUri)?.scheme != nil,
-                     "completionRedirectUri must include a valid URL scheme.")
+        precondition(URL(string: resolvedHostedLinkRedirectUri)?.scheme != nil,
+                     "hostedLinkRedirectUri must include a valid URL scheme.")
     }
 
-    private var resolvedCompletionRedirectUri: String {
-        let explicit = completionRedirectUri?.trimmingCharacters(in: .whitespacesAndNewlines)
+    private var resolvedHostedLinkRedirectUri: String {
+        let explicit = hostedLinkRedirectUri?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let explicit, !explicit.isEmpty { return explicit }
 
         if let configuredScheme = Bundle.main.firstConfiguredURLScheme, !configuredScheme.isEmpty {
-            return "\(configuredScheme)://plaid-link-complete"
+            return "\(configuredScheme)://plaid-complete"
         }
 
         if let bundleIdentifier = Bundle.main.bundleIdentifier, !bundleIdentifier.isEmpty {
-            return "\(bundleIdentifier)://plaid-link-complete"
+            return "\(bundleIdentifier)://plaid-complete"
         }
 
-        return "wedge.WedgeExample://plaid-link-complete"
+        return "wedge.WedgeExample://plaid-complete"
     }
 
-    private var completionCallbackScheme: String? {
-        URL(string: resolvedCompletionRedirectUri)?.scheme
+    private var hostedLinkCallbackScheme: String? {
+        URL(string: resolvedHostedLinkRedirectUri)?.scheme
     }
 
     public func makeUIView(context: Context) -> WKWebView {
@@ -166,7 +166,7 @@ public struct WedgePayIOS: UIViewRepresentable {
         registerMessageHandlers(on: webView, coordinator: context.coordinator)
 
         context.coordinator.webView = webView
-        if let scheme = completionCallbackScheme, #available(iOS 12.0, *) {
+        if let scheme = hostedLinkCallbackScheme, #available(iOS 12.0, *) {
             context.coordinator.hostedLinkCoordinator = HostedLinkCoordinator(
                 webView: webView,
                 callbackScheme: scheme
@@ -201,27 +201,60 @@ public struct WedgePayIOS: UIViewRepresentable {
         [
             URLQueryItem(name: "onboardingToken", value: token),
             URLQueryItem(name: "type", value: type),
-            URLQueryItem(name: "completionRedirectUri", value: resolvedCompletionRedirectUri)
+            URLQueryItem(name: "hostedLinkRedirectUri", value: resolvedHostedLinkRedirectUri),
+            URLQueryItem(name: "platform", value: "ios"),
+            URLQueryItem(name: "supportsHostedLink", value: "true")
         ]
     }
 
     private func registerBridgeScripts(on webView: WKWebView) {
-        let safeRedirect = resolvedCompletionRedirectUri
+        let safeRedirect = resolvedHostedLinkRedirectUri
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
 
         let script = """
         (function() {
           var redirectUri = "\(safeRedirect)";
+          var config = {
+            hostedLinkRedirectUri: redirectUri,
+            platform: 'ios',
+            supportsHostedLink: true
+          };
           var bridge = {
-            getCompletionRedirectUri: function() { return redirectUri; },
-            completionRedirectUri: redirectUri
+            getHostedLinkRedirectUri: function() { return redirectUri; },
+            hostedLinkRedirectUri: redirectUri,
+            platform: 'ios',
+            supportsHostedLink: true
           };
 
           window.WedgeSDKIOS = bridge;
 
+          var configApplied = false;
+          var attempts = 0;
+          var maxAttempts = 40;
+          var retryDelayMs = 50;
+
+          function applyConfig() {
+            if (configApplied) return;
+            if (window.WedgeSDK && typeof window.WedgeSDK.setConfig === 'function') {
+              window.WedgeSDK.setConfig(config);
+              configApplied = true;
+              return;
+            }
+            attempts += 1;
+            if (attempts < maxAttempts) {
+              setTimeout(applyConfig, retryDelayMs);
+            }
+          }
+
+          applyConfig();
+
           window.dispatchEvent(new CustomEvent('iOSReady', {
-            detail: { completionRedirectUri: redirectUri }
+            detail: {
+              hostedLinkRedirectUri: redirectUri,
+              platform: 'ios',
+              supportsHostedLink: true
+            }
           }));
         })();
         """
@@ -298,7 +331,7 @@ public struct WedgePayIOS: UIViewRepresentable {
                             decidePolicyFor navigationAction: WKNavigationAction,
                             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if let url = navigationAction.request.url,
-               let scheme = wrapper.completionCallbackScheme,
+               let scheme = wrapper.hostedLinkCallbackScheme,
                url.scheme?.lowercased() == scheme.lowercased() {
                 decisionHandler(.cancel)
                 return
