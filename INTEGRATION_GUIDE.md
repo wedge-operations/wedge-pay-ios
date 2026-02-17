@@ -212,7 +212,7 @@ The SDK then provides the redirect URI to the web app through supported channels
 
 1. **Preferred (`setConfig`)** — Calls:
    `WedgeSDK.setConfig({ completionRedirectUri: "<uri>" })`
-2. **Injected bridge object** — Sets both `window.WedgeSDKiOS` and `window.WedgeSDKIOS` with:
+2. **Injected bridge object** — Sets `window.WedgeSDKIOS` with:
    - `getCompletionRedirectUri(): string`
    - `completionRedirectUri: string`
    - `plaidCompletionRedirectUri: string`
@@ -430,7 +430,7 @@ For questions about implementing the type parameter functionality:
 
 ### Version 1.2.0
 - ✨ **NEW**: Runtime app-specific completion redirect URI resolution (explicit URI, URL scheme, or bundle ID fallback)
-- ✨ **NEW**: Webapp redirect propagation through `WedgeSDK.setConfig`, `window.WedgeSDKiOS/window.WedgeSDKIOS`, and supported URL query params
+- ✨ **NEW**: Webapp redirect propagation through `WedgeSDK.setConfig`, `window.WedgeSDKIOS`, and supported URL query params
 - ✨ **NEW**: Hosted Link completion callback contract maintained via `window.__hostedLinkComplete(...)`
 - 📚 **DOCUMENTATION**: Updated integration guidance for redirect/channel requirements
 

@@ -218,7 +218,6 @@ public struct WedgePayIOS: UIViewRepresentable {
             completionRedirectUri: redirectUri
           };
 
-          window.WedgeSDKiOS = bridge;
           window.WedgeSDKIOS = bridge;
 
           window.dispatchEvent(new CustomEvent('iOSReady', {
