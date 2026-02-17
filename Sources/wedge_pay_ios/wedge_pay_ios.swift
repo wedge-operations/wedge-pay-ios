@@ -5,6 +5,7 @@ import UIKit
 import AuthenticationServices
 #endif
 
+
 public let WEDGE_PAY_IOS_VERSION = "1.2.0"
 
 private let environments: [String: String] = [
@@ -96,7 +97,7 @@ public struct WedgePayIOS: UIViewRepresentable {
     public var token: String
     public var env: String
     public var type: String
-    public var hostedLinkRedirectUri: String?
+    public var hostedLinkRedirectUri: String
 
     public var onEvent: (Any) -> Void
     public var onSuccess: (String) -> Void
@@ -108,7 +109,7 @@ public struct WedgePayIOS: UIViewRepresentable {
         token: String,
         env: String,
         type: String = "onboarding",
-        hostedLinkRedirectUri: String? = nil,
+        hostedLinkRedirectUri: String,
         onEvent: @escaping (Any) -> Void,
         onSuccess: @escaping (String) -> Void,
         onClose: @escaping (Any) -> Void,
@@ -130,18 +131,7 @@ public struct WedgePayIOS: UIViewRepresentable {
     }
 
     private var resolvedHostedLinkRedirectUri: String {
-        let explicit = hostedLinkRedirectUri?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let explicit, !explicit.isEmpty { return explicit }
-
-        if let configuredScheme = Bundle.main.firstConfiguredURLScheme, !configuredScheme.isEmpty {
-            return "\(configuredScheme)://plaid-complete"
-        }
-
-        if let bundleIdentifier = Bundle.main.bundleIdentifier, !bundleIdentifier.isEmpty {
-            return "\(bundleIdentifier)://plaid-complete"
-        }
-
-        return "wedge.WedgeExample://plaid-complete"
+        hostedLinkRedirectUri.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var hostedLinkCallbackScheme: String? {
@@ -376,21 +366,3 @@ public struct WedgePayIOS: UIViewRepresentable {
     }
 }
 #endif
-
-private extension Bundle {
-    var firstConfiguredURLScheme: String? {
-        guard let urlTypes = object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] else {
-            return nil
-        }
-
-        for urlType in urlTypes {
-            if let schemes = urlType["CFBundleURLSchemes"] as? [String],
-               let first = schemes.first,
-               !first.isEmpty {
-                return first
-            }
-        }
-
-        return nil
-    }
-}

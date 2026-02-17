@@ -15,7 +15,7 @@ A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer 
 - ♿ **Accessibility**: Full VoiceOver support and accessibility labels
 - 🔄 **Error Handling**: Comprehensive error handling with retry mechanisms
 - 🧹 **Memory Management**: Proper cleanup and memory leak prevention
-- 🔗 **Plaid Hosted Link**: Opens Hosted Link in ASWebAuthenticationSession (not WKWebView), derives app-specific redirect URI at runtime, and notifies webapp via `window.__hostedLinkComplete(...)`
+- 🔗 **Plaid Hosted Link**: Opens Hosted Link in ASWebAuthenticationSession (not WKWebView), uses explicit `hostedLinkRedirectUri`, and notifies webapp via `window.__hostedLinkComplete(...)`
 
 ## Type Parameter Functionality
 
@@ -40,6 +40,7 @@ WedgePayIOS(
     token: "your-token",
     env: "sandbox",
     type: "onboarding", // Full onboarding flow
+    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
     // ... other parameters
 )
 
@@ -48,6 +49,7 @@ WedgePayIOS(
     token: "your-token", 
     env: "sandbox",
     type: "funding", // Funding-focused flow
+    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
     // ... other parameters
 )
 
@@ -78,9 +80,9 @@ The iOS bridge also exposes:
 
 ### Backward Compatibility
 
-- Existing code continues to work without changes
+- Existing integrations must pass `hostedLinkRedirectUri`
 - `type` parameter defaults to `"onboarding"` if not specified
-- No breaking changes to existing implementations
+- `hostedLinkRedirectUri` is required for Hosted Link flows
 
 ## Installation
 
@@ -130,6 +132,7 @@ WedgePayIOS(
     token: "your-onboarding-token",
     env: "sandbox", // or "development", "integration", "production"
     type: "onboarding", // or "funding" for changes to linked bank accounts
+    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
     onEvent: { event in
         // Handle general events
         print("Event: \(event)")
@@ -176,6 +179,7 @@ struct ContentView: View {
                     token: "your-onboarding-token-here",
                     env: "sandbox",
                     type: "onboarding", // or "funding" for changes to linked bank accounts
+                    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
                     onEvent: { event in
                         print("Event: \(event)")
                     },
@@ -227,10 +231,10 @@ Main SwiftUI view for the SDK.
 ```swift
 public struct WedgePayIOS: UIViewRepresentable {
     public init(
-        shouldDismiss: Bool = false,
         token: String,
         env: String,
         type: String = "onboarding",
+        hostedLinkRedirectUri: String,
         onEvent: @escaping (Any) -> Void,
         onSuccess: @escaping (String) -> Void,
         onClose: @escaping (Any) -> Void,
@@ -245,6 +249,7 @@ public struct WedgePayIOS: UIViewRepresentable {
 - `token`: Your onboarding token
 - `env`: Environment ("development", "integration", "sandbox", "production")
 - `type`: Flow type ("onboarding" for new users, "funding" for existing user bank adjustments)
+- `hostedLinkRedirectUri`: Redirect URI for Hosted Link completion (for example `com.yourapp.id://plaid-complete`)
 - `onEvent`: Called for general events
 - `onSuccess`: Called when onboarding completes successfully
 - `onClose`: Called when user closes/cancels
