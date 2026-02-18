@@ -27,7 +27,7 @@ Open `WedgeExample.xcodeproj` in Xcode.
 - **Callback Handling**: Examples of all SDK callbacks (onSuccess, onError, onClose, etc.)
 - **Custom Presentation**: Bottom slide transition instead of default side navigation
 - **Error Handling**: Comprehensive error handling and user feedback
-- **Environment Switching**: Support for integration, sandbox, and production environments
+- **Environment Switching**: Support for development (localhost), integration, sandbox, and production environments
 
 ## Type Parameter Functionality
 

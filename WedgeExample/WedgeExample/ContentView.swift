@@ -12,7 +12,7 @@ struct ContentView: View {
     @State private var alertMessage = ""
     @State private var showingOnboarding = false
     
-    private let environments = ["integration", "sandbox", "production"]
+    private let environments = ["development", "integration", "sandbox", "production"]
     private let types = ["onboarding", "funding"]
     
     var body: some View {
@@ -203,12 +203,18 @@ struct OnboardingView: View {
     let onClose: (Any) -> ()
     let onLoad: (Any) -> ()
     let onError: (Any) -> ()
+
+    private var hostedLinkRedirectUri: String {
+        let configuredScheme = Bundle.main.firstConfiguredURLScheme ?? "wedge.WedgeExample"
+        return "\(configuredScheme)://plaid-complete"
+    }
     
     var body: some View {
         WedgePayIOS(
             token: token,
             env: env,
             type: type,
+            hostedLinkRedirectUri: hostedLinkRedirectUri,
             onEvent: onEvent,
             onSuccess: onSuccess,
             onClose: onClose,
@@ -223,5 +229,22 @@ struct OnboardingView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+    }
+}
+
+private extension Bundle {
+    var firstConfiguredURLScheme: String? {
+        guard let urlTypes = object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] else {
+            return nil
+        }
+
+        for urlType in urlTypes {
+            if let schemes = urlType["CFBundleURLSchemes"] as? [String],
+               let firstScheme = schemes.first,
+               !firstScheme.isEmpty {
+                return firstScheme
+            }
+        }
+        return nil
     }
 }

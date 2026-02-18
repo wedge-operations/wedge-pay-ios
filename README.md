@@ -2,19 +2,20 @@
 
 A SwiftUI SDK that wraps the Wedge onboarding webapp inside a native iOS drawer component with bidirectional communication capabilities.
 
-**Version**: 1.1.0
+**Version**: 1.2.0
 
 ## Features
 
 - 🎯 **Native SwiftUI Integration**: Built with SwiftUI and UIViewRepresentable for modern iOS apps
 - 🔄 **Bidirectional Communication**: Real-time messaging between the webapp and native SDK
-- ⚙️ **Configurable**: Support for integration, sandbox, and production environments
+- ⚙️ **Configurable**: Support for development (localhost), integration, sandbox, and production environments
 - 🎨 **Modern UI**: Clean, native iOS design with smooth animations
 - 📱 **iOS 14+ Support**: Built for modern iOS applications
 - 🔒 **Security**: HTTPS-only navigation, input validation, and secure communication
 - ♿ **Accessibility**: Full VoiceOver support and accessibility labels
 - 🔄 **Error Handling**: Comprehensive error handling with retry mechanisms
 - 🧹 **Memory Management**: Proper cleanup and memory leak prevention
+- 🔗 **Plaid Hosted Link**: Opens Hosted Link in ASWebAuthenticationSession (not WKWebView), uses explicit `hostedLinkRedirectUri`, and notifies webapp via `window.__hostedLinkComplete(...)`
 
 ## Type Parameter Functionality
 
@@ -39,6 +40,7 @@ WedgePayIOS(
     token: "your-token",
     env: "sandbox",
     type: "onboarding", // Full onboarding flow
+    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
     // ... other parameters
 )
 
@@ -47,15 +49,40 @@ WedgePayIOS(
     token: "your-token", 
     env: "sandbox",
     type: "funding", // Funding-focused flow
+    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
+    // ... other parameters
+)
+
+// With Plaid Hosted Link (custom URL scheme must be in Info.plist)
+WedgePayIOS(
+    token: "your-token",
+    env: "sandbox",
+    type: "onboarding",
+    hostedLinkRedirectUri: "myapp://plaid-complete",
     // ... other parameters
 )
 ```
 
+### Hosted Link Native Contract
+
+When initializing web SDK config, the native wrapper sends:
+
+- `platform: "ios"`
+- `supportsHostedLink: true`
+- `hostedLinkRedirectUri: "<your-callback-uri>"`
+
+The iOS bridge also exposes:
+
+- `getHostedLinkRedirectUri()`
+- `hostedLinkRedirectUri`
+
+`completion_redirect_uri` remains unchanged in backend API payloads.
+
 ### Backward Compatibility
 
-- Existing code continues to work without changes
+- Existing integrations must pass `hostedLinkRedirectUri`
 - `type` parameter defaults to `"onboarding"` if not specified
-- No breaking changes to existing implementations
+- `hostedLinkRedirectUri` is required for Hosted Link flows
 
 ## Installation
 
@@ -79,7 +106,7 @@ Add the following dependency to your `Package.swift` file:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/wedge-operations/wedge-pay-ios.git", exact: "1.1.0")
+    .package(url: "https://github.com/wedge-operations/wedge-pay-ios.git", exact: "1.2.0")
 ]
 ```
 
@@ -103,8 +130,9 @@ import WedgePayIOS
 ```swift
 WedgePayIOS(
     token: "your-onboarding-token",
-    env: "sandbox", // or "integration", "production"
+    env: "sandbox", // or "development", "integration", "production"
     type: "onboarding", // or "funding" for changes to linked bank accounts
+    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
     onEvent: { event in
         // Handle general events
         print("Event: \(event)")
@@ -151,6 +179,7 @@ struct ContentView: View {
                     token: "your-onboarding-token-here",
                     env: "sandbox",
                     type: "onboarding", // or "funding" for changes to linked bank accounts
+                    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
                     onEvent: { event in
                         print("Event: \(event)")
                     },
@@ -183,7 +212,7 @@ The repository includes a complete example project (`WedgeExample/`) that demons
 - **SDK Integration**: How to import and use the `WedgePayIOS` component
 - **Callback Handling**: Examples of all SDK callbacks (onSuccess, onError, onClose, etc.)
 - **Error Handling**: Comprehensive error handling and user feedback
-- **Environment Switching**: Support for sandbox and production environments
+- **Environment Switching**: Support for development (localhost), sandbox, and production environments
 
 To run the example:
 1. Open `WedgeExample/WedgeExample.xcodeproj` in Xcode
@@ -202,10 +231,10 @@ Main SwiftUI view for the SDK.
 ```swift
 public struct WedgePayIOS: UIViewRepresentable {
     public init(
-        shouldDismiss: Bool = false,
         token: String,
         env: String,
         type: String = "onboarding",
+        hostedLinkRedirectUri: String,
         onEvent: @escaping (Any) -> Void,
         onSuccess: @escaping (String) -> Void,
         onClose: @escaping (Any) -> Void,
@@ -218,8 +247,9 @@ public struct WedgePayIOS: UIViewRepresentable {
 ### Parameters
 
 - `token`: Your onboarding token
-- `env`: Environment ("integration", "sandbox", "production")
+- `env`: Environment ("development", "integration", "sandbox", "production")
 - `type`: Flow type ("onboarding" for new users, "funding" for existing user bank adjustments)
+- `hostedLinkRedirectUri`: Redirect URI for Hosted Link completion (for example `com.yourapp.id://plaid-complete`)
 - `onEvent`: Called for general events
 - `onSuccess`: Called when onboarding completes successfully
 - `onClose`: Called when user closes/cancels
@@ -230,9 +260,10 @@ public struct WedgePayIOS: UIViewRepresentable {
 
 ```swift
 var environments = [
+    "development": "http://localhost:3000",
     "integration": "https://onboarding-integration.wedge-can.com",
     "sandbox": "https://onboarding-sandbox.wedge-can.com",
-    "production": "https://onboarding.wedge-can.com"
+    "production": "https://onboarding-production.wedge-can.com"
 ]
 ```
 

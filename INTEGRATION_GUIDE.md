@@ -71,6 +71,7 @@ WedgePayIOS(
     token: "your-onboarding-token",
     env: "sandbox",
     type: "onboarding", // Full onboarding flow
+    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
     onEvent: { event in
         print("Event: \(event)")
     },
@@ -93,6 +94,7 @@ WedgePayIOS(
     token: "your-onboarding-token",
     env: "sandbox",
     type: "funding", // Funding-focused flow
+    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
     onEvent: { event in
         print("Event: \(event)")
     },
@@ -136,6 +138,7 @@ struct ContentView: View {
                 token: "your-token",
                 env: "sandbox",
                 type: userType, // Dynamic type selection
+                hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
                 onEvent: { event in
                     print("Event: \(event)")
                 },
@@ -159,16 +162,109 @@ struct ContentView: View {
 }
 ```
 
+## Plaid Hosted Link (ASWebAuthenticationSession)
+
+When the Web SDK receives a `hosted_link_url` from the backend, the iOS wrapper opens it using **ASWebAuthenticationSession** (not inside the WKWebView). This avoids OAuth return URLs being handled inside the SPA and causing 404s.
+
+### Required iOS configuration
+
+1. **Callback scheme** — Set `hostedLinkRedirectUri` explicitly to your app callback URI (recommended format: `<bundle-id>://plaid-complete`, e.g. `com.yourapp.id://plaid-complete`). Your backend should send that same value in the API payload field `completion_redirect_uri`.
+
+2. **Register the URL scheme** in the app target (**Info → URL Types**). The scheme must match what the backend uses (your bundle ID when using the default, or your custom scheme). Example for bundle ID `com.yourapp.id`:
+
+   ```xml
+   <key>CFBundleURLTypes</key>
+   <array>
+       <dict>
+           <key>CFBundleURLSchemes</key>
+           <array>
+               <string>com.yourapp.id</string>
+           </array>
+           <key>CFBundleURLName</key>
+           <string>Plaid Hosted Link callback</string>
+           <key>CFBundleTypeRole</key>
+           <string>Editor</string>
+       </dict>
+   </array>
+   ```
+
+### Usage
+
+```swift
+WedgePayIOS(
+    token: "your-token",
+    env: "sandbox",
+    type: "onboarding",
+    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
+    onEvent: { _ in },
+    onSuccess: { _ in },
+    onClose: { _ in },
+    onLoad: { _ in },
+    onError: { _ in }
+)
+```
+
+### Plaid completion redirect URI – webapp config
+
+The iOS SDK uses the provided `hostedLinkRedirectUri` directly.
+
+The SDK then provides the redirect URI and Hosted Link capabilities to the web app through supported channels:
+
+1. **Preferred (`setConfig`)** — Calls:
+   `WedgeSDK.setConfig({ hostedLinkRedirectUri: "<uri>", platform: "ios", supportsHostedLink: true })`
+2. **Injected bridge object** — Sets `window.WedgeSDKIOS` with:
+   - `getHostedLinkRedirectUri(): string`
+   - `hostedLinkRedirectUri: string`
+   - `platform: "ios"`
+   - `supportsHostedLink: true`
+3. **URL query params** — Appends all accepted keys:
+   - `hostedLinkRedirectUri`
+   - `platform=ios`
+   - `supportsHostedLink=true`
+
+Query values are URL-encoded by `URLComponents`.
+
+Current Web SDK builds still accept legacy names for backward compatibility (`completionRedirectUri`, `getCompletionRedirectUri()`). New native integrations should use the hosted-link names above.
+
+### Bridge contract
+
+- The Web SDK posts to the **`openHostedLink`** script message handler. The handler accepts either a **URL string** (`message.body` as the raw URL) or a **payload object** `{ url: "<hosted_link_url>" }` (or `{ type: "OPEN_HOSTED_LINK", url: "..." }`).
+- The iOS SDK opens that URL in **ASWebAuthenticationSession** (with `callbackURLScheme` and a presentation context). The session is retained until the callback runs.
+- When the provider redirects to your app (e.g. `myapp-plaid://complete?...`) or the user cancels, the iOS SDK calls **`window.__hostedLinkComplete(result)`** (no webview reload). Result:
+  - `result.status`: `"success"` or `"cancel"`
+  - `result.callbackUrl`: the redirect URL on success (optional string)
+  - The SDK can also support sending a callback URL string containing a `status`/`result` query parameter if your web app consumes the string form.
+
+The Web SDK is responsible for registering `window.__hostedLinkComplete` and refreshing backend state on success or showing cancel/error UI on cancel.
+
+**How the SDK does it:** The SDK’s coordinator conforms to **WKScriptMessageHandler**, registers the **`openHostedLink`** handler when creating the WKWebView, and keeps a strong reference to the **ASWebAuthenticationSession** until the callback runs. It does **not** reload the webview after the provider redirects; it notifies the web app via `__hostedLinkComplete` so the web app can continue without a full page reload. If you implement your own view controller instead of using `WedgePayIOS`, you can either use the same callback contract or, after redirects, reload the webview with your current onboarding URL (the same base URL you load in the webview) so the web app can continue.
+
+### Rules
+
+- Do **not** open `hosted_link_url` inside the WKWebView.
+- Always use **ASWebAuthenticationSession** for the Hosted Link URL.
+- The session is retained until completion; concurrent `openHostedLink` calls are ignored while a session is active.
+
+### Common issues
+
+| Issue | Check |
+|-------|--------|
+| Callback never fires | Scheme in Info.plist and `hostedLinkRedirectUri` match backend `completion_redirect_uri`; session is not released early. |
+| 404 / SPA reload | Hosted Link was opened in WKWebView; ensure only the native bridge opens it in ASWebAuthenticationSession. |
+| Multiple sessions | SDK blocks concurrent Hosted Link opens; wait for completion before opening again. |
+
+---
+
 ### API Reference
 
 #### WedgePayIOS Initializer
 
 ```swift
 public init(
-    shouldDismiss: Bool = false,
     token: String,
     env: String,
-    type: String = "onboarding", // New parameter
+    type: String = "onboarding",
+    hostedLinkRedirectUri: String,
     onEvent: @escaping (Any) -> Void,
     onSuccess: @escaping (String) -> Void,
     onClose: @escaping (Any) -> Void,
@@ -182,8 +278,9 @@ public init(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `token` | String | Required | Your onboarding token |
-| `env` | String | Required | Environment ("integration", "sandbox", "production") |
+| `env` | String | Required | Environment ("development", "integration", "sandbox", "production") |
 | `type` | String | "onboarding" | Flow type ("onboarding" or "funding") |
+| `hostedLinkRedirectUri` | String | Required | App callback redirect URI used for hosted link completion (for example `com.yourapp.id://plaid-complete`). |
 | `onEvent` | Closure | Required | General event handler |
 | `onSuccess` | Closure | Required | Success completion handler |
 | `onClose` | Closure | Required | Close/cancel handler |
@@ -194,14 +291,15 @@ public init(
 
 ### Existing Code
 
-**All existing implementations continue to work without changes.** The `type` parameter defaults to `"onboarding"`, maintaining the current behavior for existing code.
+`type` continues to default to `"onboarding"`, but `hostedLinkRedirectUri` is now required.
 
 ```swift
-// This existing code continues to work exactly as before
+// Include hostedLinkRedirectUri when initializing the SDK
 WedgePayIOS(
     token: "your-token",
     env: "sandbox",
     // type defaults to "onboarding"
+    hostedLinkRedirectUri: "com.yourapp.id://plaid-complete",
     onEvent: { event in ... },
     onSuccess: { customerId in ... },
     onClose: { _ in ... },
@@ -214,9 +312,9 @@ WedgePayIOS(
 
 #### For Existing SDKs
 
-1. **No immediate action required** - existing code continues to work
-2. **Optional enhancement** - add type parameter when ready
-3. **Gradual rollout** - implement type selection based on user context
+1. **Add `hostedLinkRedirectUri`** to all initializations
+2. **Keep current type behavior** - `type` remains optional and defaults to `"onboarding"`
+3. **Roll out by user context** - implement type selection when needed
 
 #### For New SDKs
 
@@ -229,6 +327,11 @@ WedgePayIOS(
 ### Test URLs
 
 Use these test URLs to verify the type parameter functionality:
+
+#### Development Environment (local)
+- Base URL: `http://localhost:3000` (same query format as other environments)
+- Onboarding: `http://localhost:3000?onboardingToken=test&type=onboarding`
+- Funding: `http://localhost:3000?onboardingToken=test&type=funding`
 
 #### Integration Environment
 - Onboarding: `https://onboarding-integration.wedge-can.com?onboardingToken=test&type=onboarding`
@@ -312,7 +415,7 @@ func determineUserTypeFromContext(context: OnboardingContext) -> String {
 
 ## Version Information
 
-- **SDK Version**: 1.1.0
+- **SDK Version**: 1.2.0
 - **Minimum iOS Version**: 14.0+
 - **Swift Version**: 5.9+
 - **Xcode Version**: 15.0+
@@ -328,9 +431,16 @@ For questions about implementing the type parameter functionality:
 
 ## Changelog
 
+### Version 1.2.0
+- ✨ **NEW**: Hosted Link redirect URI propagation via required `hostedLinkRedirectUri`
+- ✨ **NEW**: Webapp redirect propagation through `WedgeSDK.setConfig`, `window.WedgeSDKIOS`, and supported URL query params
+- ✨ **NEW**: Hosted Link completion callback contract maintained via `window.__hostedLinkComplete(...)`
+- 📚 **DOCUMENTATION**: Updated integration guidance for redirect/channel requirements
+
 ### Version 1.1.0
 - ✨ **NEW**: Added `type` parameter support
 - ✨ **NEW**: Support for "onboarding" and "funding" flow types
+- ✨ **NEW**: Plaid Hosted Link via ASWebAuthenticationSession (`hostedLinkRedirectUri`)
 - 🔄 **ENHANCED**: URL construction includes type parameter
 - ✅ **BACKWARD COMPATIBLE**: Existing code continues to work
 - 📚 **DOCUMENTATION**: Comprehensive integration guide
